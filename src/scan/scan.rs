@@ -108,6 +108,7 @@ impl Scanner {
                 None
             }
             '"' => self.scan_string(),
+            c if c.is_ascii_digit() => self.scan_number(),
             _ => {
                 self.errors.push(ScanError::UnexpectedCharacter {
                     char: c,
@@ -150,6 +151,10 @@ impl Scanner {
         self.source.chars().nth(self.current)
     }
 
+    fn peek_next(&self) -> Option<char> {
+        self.source.chars().nth(self.current + 1)
+    }
+
     fn scan_string(&mut self) -> Option<TokenType> {
         println!("Scanning string literal");
         while let Some(c) = self.peek() {
@@ -173,6 +178,38 @@ impl Scanner {
         let raw_value = self.source[self.start..self.current].to_string();
         let value = raw_value[1..raw_value.len() - 1].to_string();
         Some(TokenType::String(value))
+    }
+
+    fn scan_number(&mut self) -> Option<TokenType> {
+        // Consume as many digits as we find in a row.
+        while let Some(c) = self.peek() {
+            if !c.is_ascii_digit() {
+                break;
+            }
+            self.advance();
+        }
+
+        // Look for a fractional part.
+        if let (Some('.'), Some(d)) = (self.peek(), self.peek_next()) {
+            if d.is_ascii_digit() {
+                // Consume the ".".
+                self.advance();
+
+                // Consume the post-decimal digits.
+                while let Some(c) = self.peek() {
+                    if !c.is_ascii_digit() {
+                        break;
+                    }
+                    self.advance();
+                }
+            }
+        }
+
+        let value = self.source[self.start..self.current]
+            .to_string()
+            .parse::<f64>()
+            .unwrap(); // unwrapping here is okay because we've already validated the string is a number.
+        Some(TokenType::Number(value))
     }
 }
 
@@ -302,5 +339,60 @@ mod tests {
         );
         assert_eq!(tokens[3].lexeme, "\"ghijkl\"");
         assert_eq!(tokens[3].line, 3);
+    }
+
+    #[test]
+    fn test_multline_string() {
+        let source = "\"abc\ndef\"".to_string();
+        let tokens = scan(source).unwrap();
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(
+            tokens[0],
+            Token::new(
+                TokenType::String("abc\ndef".to_string()),
+                "\"abc\ndef\"".to_string(),
+                2
+            )
+        );
+    }
+
+    #[test]
+    fn test_numbers() {
+        let source = "123\n4.3\n0.00".to_string();
+        let tokens = scan(source).unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::Number(123.0), "123".to_string(), 1)
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Number(4.3), "4.3".to_string(), 2)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::Number(0.0), "0.00".to_string(), 3)
+        );
+    }
+
+    #[test]
+    fn test_invalid_numbers() {
+        let source = ".123 4.5.5".to_string();
+        let tokens = scan(source).unwrap();
+        assert_eq!(tokens.len(), 6);
+        assert_eq!(tokens[0], Token::new(TokenType::Dot, ".".to_string(), 1));
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Number(123.0), "123".to_string(), 1)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::Number(4.5), "4.5".to_string(), 1)
+        );
+        assert_eq!(tokens[3], Token::new(TokenType::Dot, ".".to_string(), 1));
+        assert_eq!(
+            tokens[4],
+            Token::new(TokenType::Number(5.0), "5".to_string(), 1)
+        );
     }
 }
