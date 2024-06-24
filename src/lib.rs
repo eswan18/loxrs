@@ -3,13 +3,15 @@ use std::io;
 use std::io::BufRead;
 use std::io::Write;
 
+mod error;
 mod run;
 mod scan;
 
 pub fn run_file(filename: &str) -> Result<(), std::io::Error> {
     // Open the file and get its contents.
     let contents = fs::read_to_string(filename)?;
-    run::run_code(&contents)
+    run::run_code(&contents);
+    Ok(())
 }
 
 pub fn run_prompt() -> Result<(), std::io::Error> {
@@ -27,7 +29,7 @@ pub fn run_prompt() -> Result<(), std::io::Error> {
             // Allows us to exit on ctrl-D.
             break;
         }
-        run::run_code(&buffer)?;
+        run::run_code(&buffer);
     }
     Ok(())
 }

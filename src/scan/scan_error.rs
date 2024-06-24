@@ -18,3 +18,5 @@ impl fmt::Display for ScanError {
         }
     }
 }
+
+impl std::error::Error for ScanError {}

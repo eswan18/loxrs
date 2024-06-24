@@ -3,3 +3,4 @@ mod scan_error;
 mod token;
 
 pub use scan::scan;
+pub use scan_error::ScanError;
