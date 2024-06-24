@@ -3,7 +3,6 @@ use crate::scan::token::{Token, TokenType};
 
 pub fn scan(source: String) -> Result<Vec<Token>, Vec<ScanError>> {
     // This is a placeholder for the scanner implementation.
-    println!("Scanning...");
     let mut scanner = Scanner::new(source);
     scanner.scan_tokens()
 }
@@ -108,8 +107,12 @@ impl Scanner {
                 self.line += 1;
                 None
             }
+            '"' => self.scan_string(),
             _ => {
-                self.errors.push(ScanError::UnexpectedCharacter(c));
+                self.errors.push(ScanError::UnexpectedCharacter {
+                    char: c,
+                    line: self.line,
+                });
                 None
             }
         };
@@ -146,6 +149,31 @@ impl Scanner {
     fn peek(&self) -> Option<char> {
         self.source.chars().nth(self.current)
     }
+
+    fn scan_string(&mut self) -> Option<TokenType> {
+        println!("Scanning string literal");
+        while let Some(c) = self.peek() {
+            match c {
+                '"' => break,
+                '\n' => self.line += 1,
+                _ => (),
+            }
+            self.advance();
+        }
+        if self.is_at_end() {
+            self.errors
+                .push(ScanError::UnterminatedString { line: self.line });
+            return None;
+        }
+
+        // Consume the closing ".
+        self.advance();
+
+        // Trim the quotes off the string we've scanned.
+        let raw_value = self.source[self.start..self.current].to_string();
+        let value = raw_value[1..raw_value.len() - 1].to_string();
+        Some(TokenType::String(value))
+    }
 }
 
 #[cfg(test)]
@@ -172,8 +200,14 @@ mod tests {
         let source = "[]".to_string();
         let errors = scan(source).unwrap_err();
         assert_eq!(errors.len(), 2);
-        assert_eq!(errors[0], ScanError::UnexpectedCharacter('['));
-        assert_eq!(errors[1], ScanError::UnexpectedCharacter(']'));
+        assert_eq!(
+            errors[0],
+            ScanError::UnexpectedCharacter { char: '[', line: 1 }
+        );
+        assert_eq!(
+            errors[1],
+            ScanError::UnexpectedCharacter { char: ']', line: 1 }
+        );
     }
 
     #[test]
@@ -229,5 +263,44 @@ mod tests {
             Token::new(TokenType::RightParen, ")".to_string(), 2)
         );
         assert_eq!(tokens[5], Token::new(TokenType::Eof, "".to_string(), 2));
+    }
+
+    #[test]
+    fn test_strings_simple() {
+        let source = "\"abcdef\"".to_string();
+        let tokens = scan(source).unwrap();
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(
+            tokens[0],
+            Token::new(
+                TokenType::String("abcdef".to_string()),
+                "\"abcdef\"".to_string(),
+                1
+            )
+        );
+    }
+
+    #[test]
+    fn test_strings() {
+        let source = "(\"abcdef\" \n + \n \"ghijkl\")".to_string();
+        let tokens = scan(source).unwrap();
+        assert_eq!(tokens.len(), 6);
+        let token_types = tokens
+            .iter()
+            .map(|t| t.token_type.clone())
+            .collect::<Vec<TokenType>>();
+        assert_eq!(
+            token_types,
+            vec![
+                TokenType::LeftParen,
+                TokenType::String("abcdef".to_string()),
+                TokenType::Plus,
+                TokenType::String("ghijkl".to_string()),
+                TokenType::RightParen,
+                TokenType::Eof
+            ]
+        );
+        assert_eq!(tokens[3].lexeme, "\"ghijkl\"");
+        assert_eq!(tokens[3].line, 3);
     }
 }
