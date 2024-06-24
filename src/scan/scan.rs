@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::hash::Hash;
+
 use crate::scan::scan_error::ScanError;
 use crate::scan::token::{Token, TokenType};
 
@@ -17,11 +20,12 @@ struct Scanner {
     current: usize,
     // The current line number.
     line: u32,
+    keyword_tokens: HashMap<&'static str, TokenType>,
 }
 
 // Public API
 impl Scanner {
-    pub fn new(source: String) -> Scanner {
+    pub fn new(source: String) -> Self {
         Scanner {
             source,
             tokens: Vec::new(),
@@ -29,6 +33,7 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
+            keyword_tokens: Self::keyword_tokens(),
         }
     }
 
@@ -109,6 +114,7 @@ impl Scanner {
             }
             '"' => self.scan_string(),
             c if c.is_ascii_digit() => self.scan_number(),
+            c if c.is_ascii_alphabetic() || c == '_' => Some(self.scan_identifier_or_keyword()),
             _ => {
                 self.errors.push(ScanError::UnexpectedCharacter {
                     char: c,
@@ -210,6 +216,43 @@ impl Scanner {
             .parse::<f64>()
             .unwrap(); // unwrapping here is okay because we've already validated the string is a number.
         Some(TokenType::Number(value))
+    }
+
+    fn scan_identifier_or_keyword(&mut self) -> TokenType {
+        while let Some(c) = self.peek() {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        let lexeme = self.source[self.start..self.current].to_string();
+        match self.keyword_tokens.get(lexeme.as_str()) {
+            Some(token_type) => token_type.clone(),
+            None => TokenType::Identifier,
+        }
+    }
+
+    fn keyword_tokens() -> HashMap<&'static str, TokenType> {
+        let mut keywords = HashMap::new();
+        keywords.insert("and", TokenType::And);
+        keywords.insert("class", TokenType::Class);
+        keywords.insert("else", TokenType::Else);
+        keywords.insert("false", TokenType::False);
+        keywords.insert("for", TokenType::For);
+        keywords.insert("fun", TokenType::Fun);
+        keywords.insert("if", TokenType::If);
+        keywords.insert("nil", TokenType::Nil);
+        keywords.insert("or", TokenType::Or);
+        keywords.insert("print", TokenType::Print);
+        keywords.insert("return", TokenType::Return);
+        keywords.insert("super", TokenType::Super);
+        keywords.insert("this", TokenType::This);
+        keywords.insert("true", TokenType::True);
+        keywords.insert("var", TokenType::Var);
+        keywords.insert("while", TokenType::While);
+        keywords
     }
 }
 
@@ -393,6 +436,28 @@ mod tests {
         assert_eq!(
             tokens[4],
             Token::new(TokenType::Number(5.0), "5".to_string(), 1)
+        );
+    }
+
+    #[test]
+    fn test_ids_and_keywords() {
+        let source = "abc fun class classy land".to_string();
+        let tokens = scan(source).unwrap();
+        assert_eq!(tokens.len(), 6);
+        let token_types = tokens
+            .iter()
+            .map(|t| t.token_type.clone())
+            .collect::<Vec<TokenType>>();
+        assert_eq!(
+            token_types,
+            vec![
+                TokenType::Identifier,
+                TokenType::Fun,
+                TokenType::Class,
+                TokenType::Identifier,
+                TokenType::Identifier,
+                TokenType::Eof
+            ]
         );
     }
 }
