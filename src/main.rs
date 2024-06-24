@@ -1,14 +1,15 @@
 use clap::Parser;
+use loxrs::{run_file, run_prompt};
 
 #[derive(Parser)]
 struct Cli {
     argument: Option<String>,
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let args = Cli::parse();
     match args.argument {
-        None => println!("No argument passed"),
-        Some(arg) => println!("Argument passed: {}", arg),
+        None => run_prompt(),
+        Some(arg) => run_file(&arg),
     }
 }
