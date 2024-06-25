@@ -4,6 +4,7 @@ use std::io::BufRead;
 use std::io::Write;
 
 mod error;
+mod parse;
 mod run;
 mod scan;
 
