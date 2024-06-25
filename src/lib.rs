@@ -4,12 +4,13 @@ use std::io::BufRead;
 use std::io::Write;
 
 mod error;
+mod expr;
+mod interpret;
 mod parse;
 mod run;
 mod scan;
-mod expr;
 mod token;
-mod interpret;
+mod value;
 
 pub fn run_file(filename: &str) -> Result<(), i32> {
     // Open the file and get its contents.
@@ -20,7 +21,13 @@ pub fn run_file(filename: &str) -> Result<(), i32> {
             return Err(1);
         }
     };
-    run::run_code(&contents)
+    match run::run_code(&contents) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("{}", e);
+            Err(e.exit_code)
+        }
+    }
 }
 
 pub fn run_repl() -> Result<(), i32> {
@@ -36,8 +43,16 @@ pub fn run_repl() -> Result<(), i32> {
             // Allows us to exit on ctrl-D.
             break;
         }
-        // We intentionally suppress errors here because we want the REPL to keep running.
-        let _ = run::run_code(&buffer);
+        match run::run_code(&buffer) {
+            Ok(value) => {
+                // If all goes well, print results.
+                println!("{}", value);
+            }
+            Err(e) => {
+                // If an error is encountered, print it to stderr.
+                eprintln!("{}", e);
+            }
+        };
         buffer.clear();
     }
     Ok(())

@@ -3,22 +3,28 @@ use std::collections::HashMap;
 use crate::scan::scan_error::ScanError;
 use crate::token::{Token, TokenType};
 
+/// Scan the source code and return a vector of tokens.
 pub fn scan(source: String) -> Result<Vec<Token>, Vec<ScanError>> {
     // This is a placeholder for the scanner implementation.
     let mut scanner = Scanner::new(source);
     scanner.scan_tokens()
 }
 
+/// A scanner for the Lox language.
 struct Scanner {
+    // The source code.
     source: String,
+    // The tokens scanned so far.
     tokens: Vec<Token>,
+    // Any errors encountered during scanning.
     errors: Vec<ScanError>,
-    // The first character in the lexeme being scanned.
+    /// The first character in the lexeme being scanned.
     start: usize,
     // The character currently being considered.
     current: usize,
     // The current line number.
     line: u32,
+    // A static mapping of keywords to their token types.
     keyword_tokens: HashMap<&'static str, TokenType>,
 }
 
@@ -36,6 +42,7 @@ impl Scanner {
         }
     }
 
+    /// Scan the source code and return a vector of tokens.
     pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Vec<ScanError>> {
         while !self.is_at_end() {
             self.start = self.current;
@@ -161,7 +168,6 @@ impl Scanner {
     }
 
     fn scan_string(&mut self) -> Option<TokenType> {
-        println!("Scanning string literal");
         while let Some(c) = self.peek() {
             match c {
                 '"' => break,

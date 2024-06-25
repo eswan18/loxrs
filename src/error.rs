@@ -1,17 +1,13 @@
 use std::fmt;
 
-use crate::scan;
-
 #[derive(Debug)]
 pub struct LoxError {
-    pub scan_errors: Vec<scan::ScanError>,
+    pub exit_code: i32,
+    pub text: String,
 }
 
 impl fmt::Display for LoxError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for error in &self.scan_errors {
-            write!(f, "{}", error)?;
-        }
-        Ok(())
+        write!(f, "{}", self.text)
     }
 }
