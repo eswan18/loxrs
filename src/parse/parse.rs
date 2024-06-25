@@ -1,7 +1,6 @@
-use crate::parse::{expr::Expr, parse_error::ParseError};
-use crate::scan::{scan, Token, TokenType};
-
-use super::expr::LiteralValue;
+use crate::expr::{Expr, LiteralValue};
+use crate::parse::ParseError;
+use crate::token::{Token, TokenType};
 
 type ParseResult = Result<Expr, ParseError>;
 
@@ -29,7 +28,6 @@ impl Parser {
 
     /// Parse equality checking expressions.
     fn parse_equality(&mut self) -> ParseResult {
-        println!("parse_equality");
         let mut expr = self.parse_comparison()?;
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
@@ -49,7 +47,6 @@ impl Parser {
 
     /// Parse binary comparison expressions.
     fn parse_comparison(&mut self) -> ParseResult {
-        println!("parse_comparison");
         let mut expr = self.parse_term()?;
 
         let comparison_operators = [
@@ -155,7 +152,6 @@ impl Parser {
 
         // If we didn't match anything yet, look for a grouping expression.
         if self.advance_on_match(&[TokenType::LeftParen]) {
-            println!("found a grouping");
             let expr = self.parse_expression()?;
             match self.peek() {
                 Some(token) if token.token_type == TokenType::RightParen => {
@@ -251,6 +247,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scan::scan;
 
     #[test]
     fn simple_input() {

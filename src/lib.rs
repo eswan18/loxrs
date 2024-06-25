@@ -7,6 +7,9 @@ mod error;
 mod parse;
 mod run;
 mod scan;
+mod expr;
+mod token;
+mod interpret;
 
 pub fn run_file(filename: &str) -> Result<(), i32> {
     // Open the file and get its contents.

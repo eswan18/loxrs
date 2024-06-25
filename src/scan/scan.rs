@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::scan::scan_error::ScanError;
-use crate::scan::token::{Token, TokenType};
+use crate::token::{Token, TokenType};
 
 pub fn scan(source: String) -> Result<Vec<Token>, Vec<ScanError>> {
     // This is a placeholder for the scanner implementation.

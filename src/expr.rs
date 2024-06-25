@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::scan::Token;
+use crate::token::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum LiteralValue {
