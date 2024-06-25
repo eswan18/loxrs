@@ -302,4 +302,43 @@ mod tests {
         let ast_str = format!("{}", ast);
         assert_eq!(ast_str, "(< (- 9 4) (/ (* 4 3) 9))");
     }
+
+    #[test]
+    fn equality() {
+        let input = "4 != 5 == 6";
+        let tokens = scan(input.to_string()).unwrap();
+        let ast = parse(tokens).unwrap();
+        let ast_str = format!("{}", ast);
+        assert_eq!(ast_str, "(== (!= 4 5) 6)");
+    }
+
+    #[test]
+    fn unary() {
+        let input = "!true == -5";
+        let tokens = scan(input.to_string()).unwrap();
+        let ast = parse(tokens).unwrap();
+        let ast_str = format!("{}", ast);
+        assert_eq!(ast_str, "(== (! true) (- 5))");
+    }
+
+    #[test]
+    fn error_missing_right_paren() {
+        let input = "(4 + 5";
+        let tokens = scan(input.to_string()).unwrap();
+        let error = parse(tokens).unwrap_err();
+        assert_eq!(error, ParseError::MissingRightParen { line: 1 });
+
+        let input = "\n\n(((3 + 4) *5) * 6";
+        let tokens = scan(input.to_string()).unwrap();
+        let error = parse(tokens).unwrap_err();
+        assert_eq!(error, ParseError::MissingRightParen { line: 3 });
+    }
+
+    #[test]
+    fn error_extra_input() {
+        let input = "4 + 5 +";
+        let tokens = scan(input.to_string()).unwrap();
+        let error = parse(tokens).unwrap_err();
+        assert_eq!(error, ParseError::ExtraInput { line: 1 });
+    }
 }
