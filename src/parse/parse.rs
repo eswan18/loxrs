@@ -29,6 +29,7 @@ impl Parser {
 
     /// Parse equality checking expressions.
     fn parse_equality(&mut self) -> ParseResult {
+        println!("parse_equality");
         let mut expr = self.parse_comparison()?;
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
@@ -48,6 +49,7 @@ impl Parser {
 
     /// Parse binary comparison expressions.
     fn parse_comparison(&mut self) -> ParseResult {
+        println!("parse_comparison");
         let mut expr = self.parse_term()?;
 
         let comparison_operators = [
@@ -153,18 +155,23 @@ impl Parser {
 
         // If we didn't match anything yet, look for a grouping expression.
         if self.advance_on_match(&[TokenType::LeftParen]) {
+            println!("found a grouping");
             let expr = self.parse_expression()?;
             match self.peek() {
-                Some(token) if token.token_type != TokenType::RightParen => {
+                Some(token) if token.token_type == TokenType::RightParen => {
+                    self.advance();
+                }
+                Some(token) => {
                     return Err(ParseError::MissingRightParen { line: token.line });
                 }
                 None => {
                     let last_line = self.tokens.last().unwrap().line;
                     return Err(ParseError::MissingRightParen { line: last_line });
                 }
-                _ => {}
             };
-            return Ok(expr);
+            return Ok(Expr::Grouping {
+                expression: Box::new(expr),
+            });
         }
         let last_line = self.tokens.last().unwrap().line;
         let line = match self.peek() {
@@ -275,6 +282,24 @@ mod tests {
         let tokens = scan(input.to_string()).unwrap();
         let ast = parse(tokens).unwrap();
         let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(+ 4 (* (+ 3 45) 6))");
+        assert_eq!(ast_str, "(+ 4 (* ((+ 3 45)) 6))");
+    }
+
+    #[test]
+    fn ungrouped_arithmetic() {
+        let input = "4 * 3 + 6 / 9;";
+        let tokens = scan(input.to_string()).unwrap();
+        let ast = parse(tokens).unwrap();
+        let ast_str = format!("{}", ast);
+        assert_eq!(ast_str, "(+ (* 4 3) (/ 6 9))");
+    }
+
+    #[test]
+    fn comparisons() {
+        let input = "9 - 4 < 4 * 3 / 9";
+        let tokens = scan(input.to_string()).unwrap();
+        let ast = parse(tokens).unwrap();
+        let ast_str = format!("{}", ast);
+        assert_eq!(ast_str, "(< (- 9 4) (/ (* 4 3) 9))");
     }
 }
