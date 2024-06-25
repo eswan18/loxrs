@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 
 use crate::scan::scan_error::ScanError;
 use crate::scan::token::{Token, TokenType};

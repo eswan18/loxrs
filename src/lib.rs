@@ -7,29 +7,42 @@ mod error;
 mod run;
 mod scan;
 
-pub fn run_file(filename: &str) -> Result<(), std::io::Error> {
+pub fn run_file(filename: &str) -> Result<(), i32> {
     // Open the file and get its contents.
-    let contents = fs::read_to_string(filename)?;
-    run::run_code(&contents);
-    Ok(())
+    let contents = match fs::read_to_string(filename) {
+        Ok(contents) => contents,
+        Err(_) => {
+            eprintln!("Error reading file '{}'", filename);
+            return Err(1);
+        }
+    };
+    run::run_code(&contents)
 }
 
-pub fn run_prompt() -> Result<(), std::io::Error> {
+pub fn run_repl() -> Result<(), i32> {
     let mut buffer = String::new();
-    let input = io::stdin();
-    let mut handle = input.lock();
 
     loop {
         // Repeatedly read input from the user and execute it.
-        print!("> ");
-        io::stdout().flush()?;
-        buffer.clear();
-        let bytes_read = handle.read_line(&mut buffer)?;
+        let bytes_read = prompt_for_code(&mut buffer).map_err(|e| {
+            eprintln!("Error reading input: {}", e);
+            1
+        })?;
         if bytes_read == 0 {
             // Allows us to exit on ctrl-D.
             break;
         }
-        run::run_code(&buffer);
+        // We intentionally suppress errors here because we want the REPL to keep running.
+        let _ = run::run_code(&buffer);
+        buffer.clear();
     }
     Ok(())
+}
+
+fn prompt_for_code(buffer: &mut String) -> io::Result<usize> {
+    let input = io::stdin();
+    let mut handle = input.lock();
+    print!("> ");
+    io::stdout().flush()?;
+    handle.read_line(buffer)
 }
