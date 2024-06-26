@@ -18,6 +18,14 @@ impl LoxValue {
             LiteralValue::Nil => LoxValue::Nil,
         }
     }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            LoxValue::Nil => false,
+            LoxValue::Boolean(b) => *b,
+            _ => true,
+        }
+    }
 }
 
 impl fmt::Display for LoxValue {
