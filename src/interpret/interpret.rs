@@ -82,7 +82,8 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
                         });
                     }
                 },
-                // Comparison operators, other than equality.
+                TT::BangEqual => V::Boolean(left != right),
+                TT::EqualEqual => V::Boolean(left == right),
                 _ => panic!(),
             }
         }
@@ -288,4 +289,40 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn equality() {
+        let input_and_expected: Vec<(&str, V)> = vec![
+            // Equality using the same type
+            ("4 == 4", V::Boolean(true)),
+            ("4 != 4", V::Boolean(false)),
+            ("4 == 5", V::Boolean(false)),
+            ("4 != 5", V::Boolean(true)),
+            ("true == true", V::Boolean(true)),
+            ("true != true", V::Boolean(false)),
+            ("true == false", V::Boolean(false)),
+            ("true != false", V::Boolean(true)),
+            ("nil == nil", V::Boolean(true)),
+            ("nil != nil", V::Boolean(false)),
+            ("\"abc\" == \"abc\"", V::Boolean(true)),
+            ("\"abc\" != \"abc\"", V::Boolean(false)),
+            ("\"abc\" == \"def\"", V::Boolean(false)),
+            ("\"abc\" != \"def\"", V::Boolean(true)),
+            // Equality across different types (always false)
+            ("4 == true", V::Boolean(false)),
+            ("4 != true", V::Boolean(true)),
+            ("4 == nil", V::Boolean(false)),
+            ("4 != nil", V::Boolean(true)),
+            ("4 == \"abc\"", V::Boolean(false)),
+            ("4 != \"abc\"", V::Boolean(true)),
+            ("true == nil", V::Boolean(false)),
+            ("true != nil", V::Boolean(true)),
+            ("true == \"abc\"", V::Boolean(false)),
+            ("true != \"abc\"", V::Boolean(true)),
+            ("nil == \"abc\"", V::Boolean(false)),
+            ("nil != \"abc\"", V::Boolean(true)),
+        ];
+        assert_inputs_resolve(input_and_expected);
+    }
+
 }
