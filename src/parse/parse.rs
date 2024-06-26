@@ -1,4 +1,4 @@
-use crate::expr::{Expr, LiteralValue};
+use crate::expr::{BinaryOperator, Expr, LiteralValue, UnaryOperator};
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
 
@@ -32,13 +32,24 @@ impl Parser {
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
         while self.check_current_token_type(&equality_operators) {
-            // Okay to unwrap here because we just confirmed the current token is one of the above types.
-            let operator = self.peek().unwrap().clone();
+            let operator = match self.peek() {
+                Some(token) if token.token_type == TokenType::BangEqual => {
+                    BinaryOperator::BangEqual {
+                        token: token.clone(),
+                    }
+                }
+                Some(token) if token.token_type == TokenType::EqualEqual => {
+                    BinaryOperator::EqualEqual {
+                        token: token.clone(),
+                    }
+                }
+                _ => unreachable!("We just checked that this is one of the equality operators"),
+            };
             self.advance();
             let right = self.parse_comparison()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
-                operator: operator,
+                operator,
                 right: Box::new(right),
             };
         }
@@ -56,13 +67,30 @@ impl Parser {
             TokenType::LessEqual,
         ];
         while self.check_current_token_type(&comparison_operators) {
-            // Okay to unwrap here because we just confirmed the current token is one of the above types.
-            let operator = self.peek().unwrap().clone();
+            let operator = match self.peek() {
+                Some(token) if token.token_type == TokenType::Greater => BinaryOperator::Greater {
+                    token: token.clone(),
+                },
+                Some(token) if token.token_type == TokenType::GreaterEqual => {
+                    BinaryOperator::GreaterEqual {
+                        token: token.clone(),
+                    }
+                }
+                Some(token) if token.token_type == TokenType::Less => BinaryOperator::Less {
+                    token: token.clone(),
+                },
+                Some(token) if token.token_type == TokenType::LessEqual => {
+                    BinaryOperator::LessEqual {
+                        token: token.clone(),
+                    }
+                }
+                _ => unreachable!("We just checked that this is one of the comparison operators"),
+            };
             self.advance();
             let right = self.parse_term()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
-                operator: operator,
+                operator,
                 right: Box::new(right),
             };
         }
@@ -75,13 +103,20 @@ impl Parser {
 
         let term_operators = [TokenType::Minus, TokenType::Plus];
         while self.check_current_token_type(&term_operators) {
-            // Okay to unwrap here because we just confirmed the current token is one of the above types.
-            let operator = self.peek().unwrap().clone();
+            let operator = match self.peek() {
+                Some(token) if token.token_type == TokenType::Minus => BinaryOperator::Minus {
+                    token: token.clone(),
+                },
+                Some(token) if token.token_type == TokenType::Plus => BinaryOperator::Plus {
+                    token: token.clone(),
+                },
+                _ => unreachable!("We just checked that this is one of the term operators"),
+            };
             self.advance();
             let right = self.parse_factor()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
-                operator: operator,
+                operator,
                 right: Box::new(right),
             };
         }
@@ -94,13 +129,20 @@ impl Parser {
 
         let factor_operators = [TokenType::Slash, TokenType::Star];
         while self.check_current_token_type(&factor_operators) {
-            // Okay to unwrap here because we just confirmed the current token is one of the above types.
-            let operator = self.peek().unwrap().clone();
+            let operator = match self.peek() {
+                Some(token) if token.token_type == TokenType::Slash => BinaryOperator::Slash {
+                    token: token.clone(),
+                },
+                Some(token) if token.token_type == TokenType::Star => BinaryOperator::Star {
+                    token: token.clone(),
+                },
+                _ => unreachable!("We just checked that this is one of the factor operators"),
+            };
             self.advance();
             let right = self.parse_unary()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
-                operator: operator,
+                operator,
                 right: Box::new(right),
             };
         }
@@ -111,12 +153,19 @@ impl Parser {
     fn parse_unary(&mut self) -> ParseResult {
         let unary_operators = [TokenType::Bang, TokenType::Minus];
         if self.check_current_token_type(&unary_operators) {
-            // Okay to unwrap here because we just confirmed the current token is one of the above types.
-            let operator = self.peek().unwrap().clone();
+            let operator = match self.peek() {
+                Some(token) if token.token_type == TokenType::Bang => UnaryOperator::Bang {
+                    token: token.clone(),
+                },
+                Some(token) if token.token_type == TokenType::Minus => UnaryOperator::Minus {
+                    token: token.clone(),
+                },
+                _ => unreachable!("We just checked that this is one of the unary operators"),
+            };
             self.advance();
             let right = self.parse_unary()?;
             return Ok(Expr::Unary {
-                operator: operator,
+                operator,
                 right: Box::new(right),
             });
         }

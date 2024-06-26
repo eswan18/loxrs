@@ -1,16 +1,17 @@
 use std::fmt;
 
-use crate::{token::TokenType, value::LoxType};
+use crate::expr::{BinaryOperator, UnaryOperator};
+use crate::value::LoxType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeError {
     UnaryOpTypeError {
-        op: TokenType,
+        operator: UnaryOperator,
         operand: LoxType,
         line: u32,
     },
     BinaryOpTypeError {
-        op: TokenType,
+        operator: BinaryOperator,
         left: LoxType,
         right: LoxType,
         line: u32,
@@ -20,19 +21,26 @@ pub enum RuntimeError {
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RuntimeError::UnaryOpTypeError { op, operand, line } => {
-                let err_msg = format!("Unary operator `{}` is not valid for type {}", op, operand);
+            RuntimeError::UnaryOpTypeError {
+                operator,
+                operand,
+                line,
+            } => {
+                let err_msg = format!(
+                    "Unary operator `{}` is not valid for type {}",
+                    operator, operand
+                );
                 write!(f, "UnaryOpTypeError (line {}): {}", line, err_msg)
             }
             RuntimeError::BinaryOpTypeError {
-                op,
+                operator,
                 left,
                 right,
                 line,
             } => {
                 let err_msg = format!(
                     "Binary operator `{}` is not valid for types {} and {}",
-                    op, left, right
+                    operator, left, right
                 );
                 write!(f, "BinaryOpTypeError (line {}): {}", line, err_msg)
             }
