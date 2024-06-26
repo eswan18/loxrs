@@ -163,7 +163,7 @@ mod tests {
                 RuntimeError::UnaryOpTypeError {
                     operator: UnaryOperator::Minus {
                         token: Token {
-                            token_type: TokenType::Minus,
+                            tp: TokenType::Minus,
                             lexeme: "-".to_string(),
                             line: 1,
                         },
@@ -177,7 +177,7 @@ mod tests {
                 RuntimeError::UnaryOpTypeError {
                     operator: UnaryOperator::Minus {
                         token: Token {
-                            token_type: TokenType::Minus,
+                            tp: TokenType::Minus,
                             lexeme: "-".to_string(),
                             line: 1,
                         },
@@ -191,7 +191,7 @@ mod tests {
                 RuntimeError::UnaryOpTypeError {
                     operator: UnaryOperator::Minus {
                         token: Token {
-                            token_type: TokenType::Minus,
+                            tp: TokenType::Minus,
                             lexeme: "-".to_string(),
                             line: 1,
                         },

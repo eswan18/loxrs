@@ -33,16 +33,12 @@ impl Parser {
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
         while self.check_current_token_type(&equality_operators) {
             let operator = match self.peek() {
-                Some(token) if token.token_type == TokenType::BangEqual => {
-                    BinaryOperator::BangEqual {
-                        token: token.clone(),
-                    }
-                }
-                Some(token) if token.token_type == TokenType::EqualEqual => {
-                    BinaryOperator::EqualEqual {
-                        token: token.clone(),
-                    }
-                }
+                Some(token) if token.tp == TokenType::BangEqual => BinaryOperator::BangEqual {
+                    token: token.clone(),
+                },
+                Some(token) if token.tp == TokenType::EqualEqual => BinaryOperator::EqualEqual {
+                    token: token.clone(),
+                },
                 _ => unreachable!("We just checked that this is one of the equality operators"),
             };
             self.advance();
@@ -68,22 +64,20 @@ impl Parser {
         ];
         while self.check_current_token_type(&comparison_operators) {
             let operator = match self.peek() {
-                Some(token) if token.token_type == TokenType::Greater => BinaryOperator::Greater {
+                Some(token) if token.tp == TokenType::Greater => BinaryOperator::Greater {
                     token: token.clone(),
                 },
-                Some(token) if token.token_type == TokenType::GreaterEqual => {
+                Some(token) if token.tp == TokenType::GreaterEqual => {
                     BinaryOperator::GreaterEqual {
                         token: token.clone(),
                     }
                 }
-                Some(token) if token.token_type == TokenType::Less => BinaryOperator::Less {
+                Some(token) if token.tp == TokenType::Less => BinaryOperator::Less {
                     token: token.clone(),
                 },
-                Some(token) if token.token_type == TokenType::LessEqual => {
-                    BinaryOperator::LessEqual {
-                        token: token.clone(),
-                    }
-                }
+                Some(token) if token.tp == TokenType::LessEqual => BinaryOperator::LessEqual {
+                    token: token.clone(),
+                },
                 _ => unreachable!("We just checked that this is one of the comparison operators"),
             };
             self.advance();
@@ -104,10 +98,10 @@ impl Parser {
         let term_operators = [TokenType::Minus, TokenType::Plus];
         while self.check_current_token_type(&term_operators) {
             let operator = match self.peek() {
-                Some(token) if token.token_type == TokenType::Minus => BinaryOperator::Minus {
+                Some(token) if token.tp == TokenType::Minus => BinaryOperator::Minus {
                     token: token.clone(),
                 },
-                Some(token) if token.token_type == TokenType::Plus => BinaryOperator::Plus {
+                Some(token) if token.tp == TokenType::Plus => BinaryOperator::Plus {
                     token: token.clone(),
                 },
                 _ => unreachable!("We just checked that this is one of the term operators"),
@@ -130,10 +124,10 @@ impl Parser {
         let factor_operators = [TokenType::Slash, TokenType::Star];
         while self.check_current_token_type(&factor_operators) {
             let operator = match self.peek() {
-                Some(token) if token.token_type == TokenType::Slash => BinaryOperator::Slash {
+                Some(token) if token.tp == TokenType::Slash => BinaryOperator::Slash {
                     token: token.clone(),
                 },
-                Some(token) if token.token_type == TokenType::Star => BinaryOperator::Star {
+                Some(token) if token.tp == TokenType::Star => BinaryOperator::Star {
                     token: token.clone(),
                 },
                 _ => unreachable!("We just checked that this is one of the factor operators"),
@@ -154,10 +148,10 @@ impl Parser {
         let unary_operators = [TokenType::Bang, TokenType::Minus];
         if self.check_current_token_type(&unary_operators) {
             let operator = match self.peek() {
-                Some(token) if token.token_type == TokenType::Bang => UnaryOperator::Bang {
+                Some(token) if token.tp == TokenType::Bang => UnaryOperator::Bang {
                     token: token.clone(),
                 },
-                Some(token) if token.token_type == TokenType::Minus => UnaryOperator::Minus {
+                Some(token) if token.tp == TokenType::Minus => UnaryOperator::Minus {
                     token: token.clone(),
                 },
                 _ => unreachable!("We just checked that this is one of the unary operators"),
@@ -175,7 +169,7 @@ impl Parser {
     /// Parse primary expressions.
     fn parse_primary(&mut self) -> ParseResult {
         let token = self.peek().unwrap();
-        let literal_expr = match &token.token_type {
+        let literal_expr = match &token.tp {
             TokenType::False => Some(Expr::Literal {
                 value: LiteralValue::Boolean(false),
             }),
@@ -203,7 +197,7 @@ impl Parser {
         if self.advance_on_match(&[TokenType::LeftParen]) {
             let expr = self.parse_expression()?;
             match self.peek() {
-                Some(token) if token.token_type == TokenType::RightParen => {
+                Some(token) if token.tp == TokenType::RightParen => {
                     self.advance();
                 }
                 Some(token) => {
@@ -233,11 +227,11 @@ impl Parser {
                 Some(token) => token,
                 None => return,
             };
-            if t.token_type == TokenType::Semicolon {
+            if t.tp == TokenType::Semicolon {
                 self.advance();
                 return;
             }
-            match t.token_type {
+            match t.tp {
                 TokenType::Class => return,
                 TokenType::Fun => return,
                 TokenType::Var => return,
@@ -269,7 +263,7 @@ impl Parser {
             None => return false,
         };
         for token_type in token_types {
-            if current_token.token_type == *token_type {
+            if current_token.tp == *token_type {
                 return true;
             }
         }
@@ -302,17 +296,17 @@ mod tests {
     fn simple_input() {
         let tokens = vec![
             Token {
-                token_type: TokenType::Number(1.0),
+                tp: TokenType::Number(1.0),
                 lexeme: "1".to_string(),
                 line: 1,
             },
             Token {
-                token_type: TokenType::Plus,
+                tp: TokenType::Plus,
                 lexeme: "+".to_string(),
                 line: 1,
             },
             Token {
-                token_type: TokenType::Number(2.0),
+                tp: TokenType::Number(2.0),
                 lexeme: "2".to_string(),
                 line: 1,
             },

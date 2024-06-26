@@ -99,17 +99,13 @@ impl fmt::Display for TokenType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    pub token_type: TokenType,
+    pub tp: TokenType,
     pub lexeme: String,
     pub line: u32,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, line: u32) -> Token {
-        Token {
-            token_type,
-            lexeme,
-            line,
-        }
+    pub fn new(tp: TokenType, lexeme: String, line: u32) -> Token {
+        Token { tp, lexeme, line }
     }
 }

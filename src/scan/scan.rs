@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(tokens.len(), 6);
         let token_types = tokens
             .iter()
-            .map(|t| t.token_type.clone())
+            .map(|t| t.tp.clone())
             .collect::<Vec<TokenType>>();
         assert_eq!(
             token_types,
@@ -372,7 +372,7 @@ mod tests {
         assert_eq!(tokens.len(), 6);
         let token_types = tokens
             .iter()
-            .map(|t| t.token_type.clone())
+            .map(|t| t.tp.clone())
             .collect::<Vec<TokenType>>();
         assert_eq!(
             token_types,
@@ -451,7 +451,7 @@ mod tests {
         assert_eq!(tokens.len(), 6);
         let token_types = tokens
             .iter()
-            .map(|t| t.token_type.clone())
+            .map(|t| t.tp.clone())
             .collect::<Vec<TokenType>>();
         assert_eq!(
             token_types,
