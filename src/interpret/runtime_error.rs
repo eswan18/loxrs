@@ -23,11 +23,19 @@ impl fmt::Display for RuntimeError {
             RuntimeError::UnaryOpTypeError { op, operand, line } => {
                 let err_msg = format!("Unary operator `{}` is not valid for type {}", op, operand);
                 write!(f, "UnaryOpTypeError (line {}): {}", line, err_msg)
-            },
-            RuntimeError::BinaryOpTypeError { op, left, right, line } => {
-                let err_msg = format!("Binary operator `{}` is not valid for types {} and {}", op, left, right);
+            }
+            RuntimeError::BinaryOpTypeError {
+                op,
+                left,
+                right,
+                line,
+            } => {
+                let err_msg = format!(
+                    "Binary operator `{}` is not valid for types {} and {}",
+                    op, left, right
+                );
                 write!(f, "BinaryOpTypeError (line {}): {}", line, err_msg)
-            },
+            }
         }
     }
 }

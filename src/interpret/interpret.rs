@@ -76,7 +76,12 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
                     (V::Number(l), V::Number(r)) => V::Number(l + r),
                     (V::String(l), V::String(r)) => V::String(l + &r),
                     (l, r) => {
-                        return Err(RuntimeError::BinaryOpTypeError { op: operator.token_type, left: l.tp(), right: r.tp(), line: operator.line })
+                        return Err(RuntimeError::BinaryOpTypeError {
+                            op: operator.token_type,
+                            left: l.tp(),
+                            right: r.tp(),
+                            line: operator.line,
+                        })
                     }
                 },
                 TT::BangEqual => V::Boolean(left != right),
@@ -93,6 +98,7 @@ mod tests {
     use super::*;
     use crate::parse::parse;
     use crate::scan::scan;
+    use crate::value::LoxType;
 
     /// Evaluate the given input string, panicking if scanning or parsing fails.
     fn eval_str(input: &str) -> Result<V, RuntimeError> {
@@ -147,6 +153,40 @@ mod tests {
             ("---4", V::Number(-4.0)),
         ];
         assert_inputs_resolve(input_and_expected);
+    }
+
+    #[test]
+    fn test_unary_minus_type_errors() {
+        let input_and_expected: Vec<(&str, RuntimeError)> = vec![
+            (
+                "-nil",
+                RuntimeError::UnaryOpTypeError {
+                    op: TT::Minus,
+                    operand: LoxType::Nil,
+                    line: 1,
+                },
+            ),
+            (
+                "-true",
+                RuntimeError::UnaryOpTypeError {
+                    op: TT::Minus,
+                    operand: LoxType::Boolean,
+                    line: 1,
+                },
+            ),
+            (
+                "-\"abc\"",
+                RuntimeError::UnaryOpTypeError {
+                    op: TT::Minus,
+                    operand: LoxType::String,
+                    line: 1,
+                },
+            ),
+        ];
+        for (input, expected) in input_and_expected {
+            let actual = eval_str(input).unwrap_err();
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
@@ -273,7 +313,12 @@ mod tests {
                 // Construct the expected error and check that it matches the actual error.
                 let left = eval_str(case.left).unwrap().tp();
                 let right = eval_str(case.right).unwrap().tp();
-                let expected_err = RuntimeError::BinaryOpTypeError { op: op.clone(), left, right, line: 1 };
+                let expected_err = RuntimeError::BinaryOpTypeError {
+                    op: op.clone(),
+                    left,
+                    right,
+                    line: 1,
+                };
                 assert_eq!(err, expected_err, "Expected this error for `{}`", expr_str);
             }
         }
