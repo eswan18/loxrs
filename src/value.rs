@@ -50,6 +50,7 @@ impl fmt::Display for LoxValue {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoxType {
     Number,
     String,

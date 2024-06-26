@@ -20,9 +20,10 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
             match operator.token_type {
                 TT::Minus => match right_val {
                     V::Number(n) => V::Number(-n),
-                    _ => {
-                        return Err(RuntimeError::TypeError {
-                            msg: "Operand to '-' must be a Number".to_string(),
+                    v => {
+                        return Err(RuntimeError::UnaryOpTypeError {
+                            op: operator.token_type,
+                            operand: v.tp(),
                             line: operator.line,
                         })
                     }
@@ -61,10 +62,10 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
                         },
                         (l, r) => {
                             // If at least one operator isn't a number, return that's invalid.
-                            let op = operator.token_type;
-                            let err_msg = format!("Operator `{}` requires two Number arguments. Not valid for {} and {}", op, l.tp(), r.tp());
-                            return Err(RuntimeError::TypeError {
-                                msg: err_msg.to_string(),
+                            return Err(RuntimeError::BinaryOpTypeError {
+                                op: operator.token_type,
+                                left: l.tp(),
+                                right: r.tp(),
                                 line: operator.line,
                             });
                         }
@@ -75,11 +76,7 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
                     (V::Number(l), V::Number(r)) => V::Number(l + r),
                     (V::String(l), V::String(r)) => V::String(l + &r),
                     (l, r) => {
-                        let err_msg = format!("Operator `+` requires two Number arguments or two String arguments. Not valid for {} and {}", l.tp(), r.tp());
-                        return Err(RuntimeError::TypeError {
-                            msg: err_msg.to_string(),
-                            line: operator.line,
-                        });
+                        return Err(RuntimeError::BinaryOpTypeError { op: operator.token_type, left: l.tp(), right: r.tp(), line: operator.line })
                     }
                 },
                 TT::BangEqual => V::Boolean(left != right),
@@ -264,16 +261,6 @@ mod tests {
                 exclude_ops: vec![TT::Plus],
             },
         ];
-        /// Build an expected type error on-the-fly.
-        fn build_type_err(op: &TT, left: &str, right: &str, line: u32) -> RuntimeError {
-            let left_type = eval_str(left).unwrap().tp().to_string();
-            let right_type = eval_str(right).unwrap().tp().to_string();
-            let msg = match op {
-                TT::Plus => format!("Operator `+` requires two Number arguments or two String arguments. Not valid for {} and {}", left_type, right_type),
-                token_type => format!("Operator `{}` requires two Number arguments. Not valid for {} and {}", token_type, left_type, right_type),
-            };
-            RuntimeError::TypeError { msg, line }
-        }
         for op in binary_ops {
             for case in &cases {
                 // Skip this operator/test-case combo if it's in the exclude list.
@@ -284,7 +271,9 @@ mod tests {
                 let expr_str = format!("{} {} {}", case.left, op, case.right);
                 let err = eval_str(&expr_str).unwrap_err();
                 // Construct the expected error and check that it matches the actual error.
-                let expected_err = build_type_err(&op, case.left, case.right, 1);
+                let left = eval_str(case.left).unwrap().tp();
+                let right = eval_str(case.right).unwrap().tp();
+                let expected_err = RuntimeError::BinaryOpTypeError { op: op.clone(), left, right, line: 1 };
                 assert_eq!(err, expected_err, "Expected this error for `{}`", expr_str);
             }
         }
@@ -324,5 +313,4 @@ mod tests {
         ];
         assert_inputs_resolve(input_and_expected);
     }
-
 }
