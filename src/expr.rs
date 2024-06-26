@@ -1,76 +1,72 @@
 use core::fmt;
 use std::fmt::Display;
 
-use crate::token::Token;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BinaryOperator {
-    Plus { token: Token },
-    Minus { token: Token },
-    Star { token: Token },
-    Slash { token: Token },
-    BangEqual { token: Token },
-    EqualEqual { token: Token },
-    Greater { token: Token },
-    GreaterEqual { token: Token },
-    Less { token: Token },
-    LessEqual { token: Token },
-}
-
-impl BinaryOperator {
-    pub fn line_number(&self) -> u32 {
-        match self {
-            BinaryOperator::Plus { token } => token.line,
-            BinaryOperator::Minus { token } => token.line,
-            BinaryOperator::Star { token } => token.line,
-            BinaryOperator::Slash { token } => token.line,
-            BinaryOperator::BangEqual { token } => token.line,
-            BinaryOperator::EqualEqual { token } => token.line,
-            BinaryOperator::Greater { token } => token.line,
-            BinaryOperator::GreaterEqual { token } => token.line,
-            BinaryOperator::Less { token } => token.line,
-            BinaryOperator::LessEqual { token } => token.line,
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BinaryOperator {
+    pub tp: BinaryOperatorType,
+    pub line: u32,
 }
 
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.tp)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BinaryOperatorType {
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    BangEqual,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+}
+
+impl Display for BinaryOperatorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BinaryOperator::Plus { .. } => write!(f, "+"),
-            BinaryOperator::Minus { .. } => write!(f, "-"),
-            BinaryOperator::Star { .. } => write!(f, "*"),
-            BinaryOperator::Slash { .. } => write!(f, "/"),
-            BinaryOperator::BangEqual { .. } => write!(f, "!="),
-            BinaryOperator::EqualEqual { .. } => write!(f, "=="),
-            BinaryOperator::Greater { .. } => write!(f, ">"),
-            BinaryOperator::GreaterEqual { .. } => write!(f, ">="),
-            BinaryOperator::Less { .. } => write!(f, "<"),
-            BinaryOperator::LessEqual { .. } => write!(f, "<="),
+            BinaryOperatorType::Plus => write!(f, "+"),
+            BinaryOperatorType::Minus => write!(f, "-"),
+            BinaryOperatorType::Star => write!(f, "*"),
+            BinaryOperatorType::Slash => write!(f, "/"),
+            BinaryOperatorType::BangEqual => write!(f, "!="),
+            BinaryOperatorType::EqualEqual => write!(f, "=="),
+            BinaryOperatorType::Greater => write!(f, ">"),
+            BinaryOperatorType::GreaterEqual => write!(f, ">="),
+            BinaryOperatorType::Less => write!(f, "<"),
+            BinaryOperatorType::LessEqual => write!(f, "<="),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum UnaryOperator {
-    Minus { token: Token },
-    Bang { token: Token },
-}
-
-impl UnaryOperator {
-    pub fn line_number(&self) -> u32 {
-        match self {
-            UnaryOperator::Minus { token } => token.line,
-            UnaryOperator::Bang { token } => token.line,
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UnaryOperator {
+    pub tp: UnaryOperatorType,
+    pub line: u32,
 }
 
 impl Display for UnaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.tp)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UnaryOperatorType {
+    Minus,
+    Bang,
+}
+
+impl Display for UnaryOperatorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UnaryOperator::Minus { .. } => write!(f, "-"),
-            UnaryOperator::Bang { .. } => write!(f, "!"),
+            UnaryOperatorType::Minus => write!(f, "-"),
+            UnaryOperatorType::Bang => write!(f, "!"),
         }
     }
 }

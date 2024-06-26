@@ -1,4 +1,6 @@
-use crate::expr::{BinaryOperator, Expr, LiteralValue, UnaryOperator};
+use crate::expr::{
+    BinaryOperator, BinaryOperatorType, Expr, LiteralValue, UnaryOperator, UnaryOperatorType,
+};
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
 
@@ -32,14 +34,16 @@ impl Parser {
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
         while self.check_current_token_type(&equality_operators) {
-            let operator = match self.peek() {
-                Some(token) if token.tp == TokenType::BangEqual => BinaryOperator::BangEqual {
-                    token: token.clone(),
-                },
-                Some(token) if token.tp == TokenType::EqualEqual => BinaryOperator::EqualEqual {
-                    token: token.clone(),
-                },
+            // Unwrapping here is safe because we just checked that the token is one of these.
+            let token = self.peek().unwrap();
+            let op_type = match token.tp {
+                TokenType::BangEqual => BinaryOperatorType::BangEqual,
+                TokenType::EqualEqual => BinaryOperatorType::EqualEqual,
                 _ => unreachable!("We just checked that this is one of the equality operators"),
+            };
+            let operator = BinaryOperator {
+                tp: op_type,
+                line: token.line,
             };
             self.advance();
             let right = self.parse_comparison()?;
@@ -63,22 +67,18 @@ impl Parser {
             TokenType::LessEqual,
         ];
         while self.check_current_token_type(&comparison_operators) {
-            let operator = match self.peek() {
-                Some(token) if token.tp == TokenType::Greater => BinaryOperator::Greater {
-                    token: token.clone(),
-                },
-                Some(token) if token.tp == TokenType::GreaterEqual => {
-                    BinaryOperator::GreaterEqual {
-                        token: token.clone(),
-                    }
-                }
-                Some(token) if token.tp == TokenType::Less => BinaryOperator::Less {
-                    token: token.clone(),
-                },
-                Some(token) if token.tp == TokenType::LessEqual => BinaryOperator::LessEqual {
-                    token: token.clone(),
-                },
+            // Unwrapping here is safe because we just checked that the token is one of these.
+            let token = self.peek().unwrap();
+            let op_type = match token.tp {
+                TokenType::Greater => BinaryOperatorType::Greater,
+                TokenType::GreaterEqual => BinaryOperatorType::GreaterEqual,
+                TokenType::Less => BinaryOperatorType::Less,
+                TokenType::LessEqual => BinaryOperatorType::LessEqual,
                 _ => unreachable!("We just checked that this is one of the comparison operators"),
+            };
+            let operator = BinaryOperator {
+                tp: op_type,
+                line: token.line,
             };
             self.advance();
             let right = self.parse_term()?;
@@ -97,14 +97,16 @@ impl Parser {
 
         let term_operators = [TokenType::Minus, TokenType::Plus];
         while self.check_current_token_type(&term_operators) {
-            let operator = match self.peek() {
-                Some(token) if token.tp == TokenType::Minus => BinaryOperator::Minus {
-                    token: token.clone(),
-                },
-                Some(token) if token.tp == TokenType::Plus => BinaryOperator::Plus {
-                    token: token.clone(),
-                },
+            // Unwrapping here is safe because we just checked that the token is one of these.
+            let token = self.peek().unwrap();
+            let operator = match token.tp {
+                TokenType::Minus => BinaryOperatorType::Minus,
+                TokenType::Plus => BinaryOperatorType::Plus,
                 _ => unreachable!("We just checked that this is one of the term operators"),
+            };
+            let operator = BinaryOperator {
+                tp: operator,
+                line: token.line,
             };
             self.advance();
             let right = self.parse_factor()?;
@@ -123,14 +125,16 @@ impl Parser {
 
         let factor_operators = [TokenType::Slash, TokenType::Star];
         while self.check_current_token_type(&factor_operators) {
-            let operator = match self.peek() {
-                Some(token) if token.tp == TokenType::Slash => BinaryOperator::Slash {
-                    token: token.clone(),
-                },
-                Some(token) if token.tp == TokenType::Star => BinaryOperator::Star {
-                    token: token.clone(),
-                },
+            // Unwrapping here is safe because we just checked that the token is one of these.
+            let token = self.peek().unwrap();
+            let operator = match token.tp {
+                TokenType::Slash => BinaryOperatorType::Slash,
+                TokenType::Star => BinaryOperatorType::Star,
                 _ => unreachable!("We just checked that this is one of the factor operators"),
+            };
+            let operator = BinaryOperator {
+                tp: operator,
+                line: token.line,
             };
             self.advance();
             let right = self.parse_unary()?;
@@ -147,14 +151,16 @@ impl Parser {
     fn parse_unary(&mut self) -> ParseResult {
         let unary_operators = [TokenType::Bang, TokenType::Minus];
         if self.check_current_token_type(&unary_operators) {
-            let operator = match self.peek() {
-                Some(token) if token.tp == TokenType::Bang => UnaryOperator::Bang {
-                    token: token.clone(),
-                },
-                Some(token) if token.tp == TokenType::Minus => UnaryOperator::Minus {
-                    token: token.clone(),
-                },
+            // Unwrapping here is safe because we just checked that the token is one of these.
+            let token = self.peek().unwrap();
+            let operator = match token.tp {
+                TokenType::Bang => UnaryOperatorType::Bang,
+                TokenType::Minus => UnaryOperatorType::Minus,
                 _ => unreachable!("We just checked that this is one of the unary operators"),
+            };
+            let operator = UnaryOperator {
+                tp: operator,
+                line: token.line,
             };
             self.advance();
             let right = self.parse_unary()?;

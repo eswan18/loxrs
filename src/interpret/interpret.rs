@@ -1,4 +1,4 @@
-use crate::expr::{BinaryOperator, Expr, UnaryOperator};
+use crate::expr::{BinaryOperatorType, Expr, UnaryOperatorType};
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 
@@ -16,18 +16,18 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
         Expr::Grouping { expression } => eval(*expression)?,
         Expr::Unary { operator, right } => {
             let right_val = eval(*right)?;
-            match operator {
-                UnaryOperator::Minus { .. } => match right_val {
+            match operator.tp {
+                UnaryOperatorType::Minus => match right_val {
                     V::Number(n) => V::Number(-n),
                     v => {
                         return Err(RuntimeError::UnaryOpTypeError {
-                            operator: operator.clone(),
+                            operator,
                             operand: v.tp(),
-                            line: operator.line_number(),
+                            line: operator.line,
                         })
                     }
                 },
-                UnaryOperator::Bang { .. } => V::Boolean(!right_val.is_truthy()),
+                UnaryOperatorType::Bang { .. } => V::Boolean(!right_val.is_truthy()),
             }
         }
         Expr::Binary {
@@ -37,55 +37,53 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
         } => {
             let left = eval(*left)?;
             let right = eval(*right)?;
-            match operator {
+            match operator.tp {
                 // Arithmetic and comparison operators that always require two numbers.
-                BinaryOperator::Minus { .. }
-                | BinaryOperator::Slash { .. }
-                | BinaryOperator::Star { .. }
-                | BinaryOperator::Greater { .. }
-                | BinaryOperator::GreaterEqual { .. }
-                | BinaryOperator::Less { .. }
-                | BinaryOperator::LessEqual { .. } => {
+                BinaryOperatorType::Minus
+                | BinaryOperatorType::Slash
+                | BinaryOperatorType::Star
+                | BinaryOperatorType::Greater
+                | BinaryOperatorType::GreaterEqual
+                | BinaryOperatorType::Less
+                | BinaryOperatorType::LessEqual => {
                     match (left, right) {
                         // If both operands are numbers, return the result.
-                        (V::Number(l), V::Number(r)) => match operator {
-                            BinaryOperator::Minus { .. } => V::Number(l - r),
-                            BinaryOperator::Slash { .. } => V::Number(l / r),
-                            BinaryOperator::Star { .. } => V::Number(l * r),
-                            BinaryOperator::GreaterEqual { .. } => V::Boolean(l >= r),
-                            BinaryOperator::Greater { .. } => V::Boolean(l > r),
-                            BinaryOperator::LessEqual { .. } => V::Boolean(l <= r),
-                            BinaryOperator::Less { .. } => V::Boolean(l < r),
+                        (V::Number(l), V::Number(r)) => match operator.tp {
+                            BinaryOperatorType::Minus => V::Number(l - r),
+                            BinaryOperatorType::Slash => V::Number(l / r),
+                            BinaryOperatorType::Star => V::Number(l * r),
+                            BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
+                            BinaryOperatorType::Greater => V::Boolean(l > r),
+                            BinaryOperatorType::LessEqual => V::Boolean(l <= r),
+                            BinaryOperatorType::Less => V::Boolean(l < r),
                             _ => unreachable!("we already matched to one of these operators"),
                         },
                         (l, r) => {
                             // If at least one operator isn't a number, that's invalid.
                             return Err(RuntimeError::BinaryOpTypeError {
-                                operator: operator.clone(),
+                                operator,
                                 left: l.tp(),
                                 right: r.tp(),
-                                line: operator.line_number(),
+                                line: operator.line,
                             });
                         }
                     }
                 }
                 // Plus is special, since it works on numbers or strings.
-                BinaryOperator::Plus { token } => match (left, right) {
+                BinaryOperatorType::Plus => match (left, right) {
                     (V::Number(l), V::Number(r)) => V::Number(l + r),
                     (V::String(l), V::String(r)) => V::String(l + &r),
                     (l, r) => {
                         return Err(RuntimeError::BinaryOpTypeError {
-                            operator: BinaryOperator::Plus {
-                                token: token.clone(),
-                            },
+                            operator,
                             left: l.tp(),
                             right: r.tp(),
-                            line: token.line,
+                            line: operator.line,
                         })
                     }
                 },
-                BinaryOperator::BangEqual { .. } => V::Boolean(left != right),
-                BinaryOperator::EqualEqual { .. } => V::Boolean(left == right),
+                BinaryOperatorType::BangEqual => V::Boolean(left != right),
+                BinaryOperatorType::EqualEqual => V::Boolean(left == right),
             }
         }
     };
@@ -95,6 +93,7 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::expr::{BinaryOperator, UnaryOperator};
     use crate::parse::parse;
     use crate::scan::scan;
     use crate::token::{Token, TokenType};
@@ -161,12 +160,9 @@ mod tests {
             (
                 "-nil",
                 RuntimeError::UnaryOpTypeError {
-                    operator: UnaryOperator::Minus {
-                        token: Token {
-                            tp: TokenType::Minus,
-                            lexeme: "-".to_string(),
-                            line: 1,
-                        },
+                    operator: UnaryOperator {
+                        tp: UnaryOperatorType::Minus,
+                        line: 1,
                     },
                     operand: LoxType::Nil,
                     line: 1,
@@ -175,12 +171,9 @@ mod tests {
             (
                 "-true",
                 RuntimeError::UnaryOpTypeError {
-                    operator: UnaryOperator::Minus {
-                        token: Token {
-                            tp: TokenType::Minus,
-                            lexeme: "-".to_string(),
-                            line: 1,
-                        },
+                    operator: UnaryOperator {
+                        tp: UnaryOperatorType::Minus,
+                        line: 1,
                     },
                     operand: LoxType::Boolean,
                     line: 1,
@@ -189,12 +182,9 @@ mod tests {
             (
                 "-\"abc\"",
                 RuntimeError::UnaryOpTypeError {
-                    operator: UnaryOperator::Minus {
-                        token: Token {
-                            tp: TokenType::Minus,
-                            lexeme: "-".to_string(),
-                            line: 1,
-                        },
+                    operator: UnaryOperator {
+                        tp: UnaryOperatorType::Minus,
+                        line: 1,
                     },
                     operand: LoxType::String,
                     line: 1,
@@ -261,29 +251,37 @@ mod tests {
         // Commentary: I went a little crazy on this test, but you can't say it's not thorough.
         // Each numeric binary operator (as a TokenType) and its corresponding error message.
         let binary_ops = vec![
-            BinaryOperator::Plus {
-                token: Token::new(TokenType::Plus, "+".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::Plus,
+                line: 1,
             },
-            BinaryOperator::Minus {
-                token: Token::new(TokenType::Minus, "-".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::Minus,
+                line: 1,
             },
-            BinaryOperator::Star {
-                token: Token::new(TokenType::Star, "*".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::Star,
+                line: 1,
             },
-            BinaryOperator::Slash {
-                token: Token::new(TokenType::Slash, "/".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::Slash,
+                line: 1,
             },
-            BinaryOperator::Greater {
-                token: Token::new(TokenType::Greater, ">".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::Greater,
+                line: 1,
             },
-            BinaryOperator::GreaterEqual {
-                token: Token::new(TokenType::GreaterEqual, ">=".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::GreaterEqual,
+                line: 1,
             },
-            BinaryOperator::Less {
-                token: Token::new(TokenType::Less, "<".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::Less,
+                line: 1,
             },
-            BinaryOperator::LessEqual {
-                token: Token::new(TokenType::LessEqual, "<=".to_string(), 1),
+            BinaryOperator {
+                tp: BinaryOperatorType::LessEqual,
+                line: 1,
             },
         ];
         // A bunch of cases where the binary operator should fail due to type errors.
