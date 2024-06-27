@@ -6,18 +6,18 @@ use std::io::Write;
 /// Interpret the given AST.
 //
 /// This is a thin wrapper over the non-public eval function.
-pub fn interpret(ast: Ast, writer: Box<dyn Write>) -> Result<(), RuntimeError> {
+pub fn interpret<W: Write>(ast: Ast, writer: W) -> Result<(), RuntimeError> {
     let mut interpreter = Interpreter::new(writer);
     interpreter.interpret(ast)
 }
 
-struct Interpreter {
+struct Interpreter<W: Write> {
     // Where to direct the output of "print"
-    writer: Box<dyn Write>,
+    writer: W,
 }
 
-impl Interpreter {
-    pub fn new(writer: Box<dyn Write>) -> Self {
+impl<W: Write> Interpreter<W> {
+    pub fn new(writer: W) -> Self {
         Self { writer }
     }
 
@@ -35,8 +35,7 @@ impl Interpreter {
             }
             Stmt::Print(expr) => {
                 let value = self.eval_expr(expr)?;
-                let mut stdout: Box<dyn Write> = Box::new(std::io::stdout());
-                writeln!(stdout, "{}", value).map_err(|io_err| RuntimeError::IOError(io_err))?;
+                writeln!(self.writer, "{}", value).map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
         }
         Ok(())
@@ -131,32 +130,6 @@ mod tests {
     use crate::parse::parse;
     use crate::scan::scan;
     use crate::value::LoxType;
-    use std::string::FromUtf8Error;
-
-    struct MockWriter {
-        written: Vec<u8>,
-    }
-
-    impl MockWriter {
-        pub fn new() -> Self {
-            MockWriter { written: vec![] }
-        }
-        /// Fetch whatever bytes have been written, as a String.
-        pub fn written_string(&self) -> Result<String, FromUtf8Error> {
-            String::from_utf8(self.written.clone())
-        }
-    }
-
-    impl Write for MockWriter {
-        fn write(&mut self, to_write: &[u8]) -> Result<usize, std::io::Error> {
-            // Append whatever string is written to the string
-            self.written.extend(to_write);
-            Ok(0)
-        }
-        fn flush(&mut self) -> Result<(), std::io::Error> {
-            Ok(())
-        }
-    }
 
     /// Evaluate a given input string that represents an expression, panicking if scanning or parsing fails.
     fn eval_str(input: &str) -> Result<V, RuntimeError> {
@@ -164,13 +137,25 @@ mod tests {
         let input = format!("{};", input);
         let tokens = scan(input).unwrap();
         let stmts = parse(tokens).unwrap();
-        let mut interpreter = Interpreter::new(Box::new(MockWriter::new()));
+        let mock_writer: Vec<u8> = Vec::new();
+        let mut interpreter = Interpreter::new(mock_writer);
         // We expect the AST to contain a single expression.
         let expr = match stmts[0].clone() {
             Stmt::Expression(expr) => expr,
             _ => panic!("Expected an expression statement"),
         };
         interpreter.eval_expr(expr)
+    }
+
+    /// Interpret one or more statements and collect the printed output into a string.
+    fn exec_ast(input: &str) -> Result<String, RuntimeError> {
+        let tokens = scan(input.to_string()).unwrap();
+        let ast = parse(tokens).unwrap();
+        let mock_writer: Vec<u8> = Vec::new();
+        let mut interpreter = Interpreter::new(mock_writer);
+        interpreter.interpret(ast)?;
+        let written = String::from_utf8(interpreter.writer).unwrap();
+        Ok(written)
     }
 
     /// Assert that a set of inputs produce the corresponding outputs when evaluated.
@@ -461,4 +446,16 @@ mod tests {
     }
 
     // Tests of statement evaluation.
+
+    #[test]
+    fn print_stmt() {
+        let output = exec_ast("print 123;").unwrap();
+        assert_eq!(output, "123\n");
+    }
+
+    #[test]
+    fn multiline_print_stmt() {
+        let output = exec_ast("print 123 + 456;\ntrue != true;\nprint 3 > 4;").unwrap();
+        assert_eq!(output, "579\nfalse\n");
+    }
 }
