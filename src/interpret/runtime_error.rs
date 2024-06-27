@@ -30,7 +30,7 @@ impl fmt::Display for RuntimeError {
                     "Unary operator `{}` is not valid for type {}",
                     operator, operand
                 );
-                write!(f, "UnaryOpTypeError (line {}): {}", line, err_msg)
+                write!(f, "UnaryOpTypeError [line {}]: {}", line, err_msg)
             }
             RuntimeError::BinaryOpTypeError {
                 operator,
@@ -42,7 +42,7 @@ impl fmt::Display for RuntimeError {
                     "Binary operator `{}` is not valid for types {} and {}",
                     operator, left, right
                 );
-                write!(f, "BinaryOpTypeError (line {}): {}", line, err_msg)
+                write!(f, "BinaryOpTypeError [line {}]: {}", line, err_msg)
             }
         }
     }

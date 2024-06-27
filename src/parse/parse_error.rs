@@ -10,10 +10,10 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ParseError::MissingRightParen { line } => {
-                write!(f, "[line {}] Missing ')'", line)
+                write!(f, "ParseError [line {}]: Missing ')'", line)
             }
             ParseError::ExtraInput { line } => {
-                write!(f, "[line {}] Extra input", line)
+                write!(f, "ParseError [line {}]: Extra input", line)
             }
         }
     }

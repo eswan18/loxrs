@@ -10,10 +10,14 @@ impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ScanError::UnexpectedCharacter { char, line } => {
-                write!(f, "[line {}] Unexpected character: '{}'", line, char)
+                write!(
+                    f,
+                    "ScanError [line {}]: Unexpected character: '{}'",
+                    line, char
+                )
             }
             ScanError::UnterminatedString { line } => {
-                write!(f, "[line {}] Unterminated string", line)
+                write!(f, "ScanError [line {}]: Unterminated string", line)
             }
         }
     }
