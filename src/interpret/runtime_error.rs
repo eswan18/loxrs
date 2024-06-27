@@ -16,6 +16,7 @@ pub enum RuntimeError {
         right: LoxType,
         line: u32,
     },
+    IOError(std::io::Error),
 }
 
 impl fmt::Display for RuntimeError {

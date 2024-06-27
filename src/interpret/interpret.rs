@@ -1,100 +1,127 @@
 use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
+use std::io::Write;
 
 /// Interpret the given AST.
 //
 /// This is a thin wrapper over the non-public eval function.
-pub fn interpret(ast: Ast) -> Result<(), RuntimeError> {
-    for stmt in ast {
-        eval_stmt(stmt)?;
+pub fn interpret(ast: Ast, writer: Box<dyn Write>) -> Result<(), RuntimeError> {
+    let mut interpreter = Interpreter::new(writer);
+    interpreter.interpret(ast)
+}
+
+struct Interpreter {
+    // Where to direct the output of "print"
+    writer: Box<dyn Write>,
+}
+
+impl Interpreter {
+    pub fn new(writer: Box<dyn Write>) -> Self {
+        Self { writer }
     }
-    Ok(())
-}
 
-fn eval_stmt(stmt: Stmt) -> Result<(), RuntimeError> {
-    todo!();
-}
+    pub fn interpret(&mut self, ast: Ast) -> Result<(), RuntimeError> {
+        for stmt in ast {
+            eval_stmt(stmt)?;
+        }
+        Ok(())
+    }
 
-/// Evaluate the given expression and return the result.
-fn eval_expr(expr: Expr) -> Result<V, RuntimeError> {
-    let evaluated = match expr {
-        Expr::Literal { value } => V::new_from_literal(value),
-        Expr::Grouping { expression } => eval_expr(*expression)?,
-        Expr::Unary { operator, right } => {
-            let right_val = eval_expr(*right)?;
-            match operator.tp {
-                UnaryOperatorType::Minus => match right_val {
-                    V::Number(n) => V::Number(-n),
-                    v => {
-                        return Err(RuntimeError::UnaryOpTypeError {
-                            operator,
-                            operand: v.tp(),
-                            line: operator.line,
-                        })
-                    }
-                },
-                UnaryOperatorType::Bang { .. } => V::Boolean(!right_val.is_truthy()),
+    fn eval_stmt(stmt: Stmt) -> Result<(), RuntimeError> {
+        match stmt {
+            Stmt::Expression(expr) => {
+                eval_expr(expr)?;
+            }
+            Stmt::Print(expr) => {
+                let value = eval_expr(expr)?;
+                let mut stdout: Box<dyn Write> = Box::new(std::io::stdout());
+                writeln!(stdout, "{}", value).map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
         }
-        Expr::Binary {
-            left,
-            operator,
-            right,
-        } => {
-            let left = eval_expr(*left)?;
-            let right = eval_expr(*right)?;
-            match operator.tp {
-                // Arithmetic and comparison operators that always require two numbers.
-                BinaryOperatorType::Minus
-                | BinaryOperatorType::Slash
-                | BinaryOperatorType::Star
-                | BinaryOperatorType::Greater
-                | BinaryOperatorType::GreaterEqual
-                | BinaryOperatorType::Less
-                | BinaryOperatorType::LessEqual => {
-                    match (left, right) {
-                        // If both operands are numbers, return the result.
-                        (V::Number(l), V::Number(r)) => match operator.tp {
-                            BinaryOperatorType::Minus => V::Number(l - r),
-                            BinaryOperatorType::Slash => V::Number(l / r),
-                            BinaryOperatorType::Star => V::Number(l * r),
-                            BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
-                            BinaryOperatorType::Greater => V::Boolean(l > r),
-                            BinaryOperatorType::LessEqual => V::Boolean(l <= r),
-                            BinaryOperatorType::Less => V::Boolean(l < r),
-                            _ => unreachable!("we already matched to one of these operators"),
-                        },
+        Ok(())
+    }
+
+    /// Evaluate the given expression and return the result.
+    fn eval_expr(expr: Expr) -> Result<V, RuntimeError> {
+        let evaluated = match expr {
+            Expr::Literal { value } => V::new_from_literal(value),
+            Expr::Grouping { expression } => eval_expr(*expression)?,
+            Expr::Unary { operator, right } => {
+                let right_val = eval_expr(*right)?;
+                match operator.tp {
+                    UnaryOperatorType::Minus => match right_val {
+                        V::Number(n) => V::Number(-n),
+                        v => {
+                            return Err(RuntimeError::UnaryOpTypeError {
+                                operator,
+                                operand: v.tp(),
+                                line: operator.line,
+                            })
+                        }
+                    },
+                    UnaryOperatorType::Bang { .. } => V::Boolean(!right_val.is_truthy()),
+                }
+            }
+            Expr::Binary {
+                left,
+                operator,
+                right,
+            } => {
+                let left = eval_expr(*left)?;
+                let right = eval_expr(*right)?;
+                match operator.tp {
+                    // Arithmetic and comparison operators that always require two numbers.
+                    BinaryOperatorType::Minus
+                    | BinaryOperatorType::Slash
+                    | BinaryOperatorType::Star
+                    | BinaryOperatorType::Greater
+                    | BinaryOperatorType::GreaterEqual
+                    | BinaryOperatorType::Less
+                    | BinaryOperatorType::LessEqual => {
+                        match (left, right) {
+                            // If both operands are numbers, return the result.
+                            (V::Number(l), V::Number(r)) => match operator.tp {
+                                BinaryOperatorType::Minus => V::Number(l - r),
+                                BinaryOperatorType::Slash => V::Number(l / r),
+                                BinaryOperatorType::Star => V::Number(l * r),
+                                BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
+                                BinaryOperatorType::Greater => V::Boolean(l > r),
+                                BinaryOperatorType::LessEqual => V::Boolean(l <= r),
+                                BinaryOperatorType::Less => V::Boolean(l < r),
+                                _ => unreachable!("we already matched to one of these operators"),
+                            },
+                            (l, r) => {
+                                // If at least one operator isn't a number, that's invalid.
+                                return Err(RuntimeError::BinaryOpTypeError {
+                                    operator,
+                                    left: l.tp(),
+                                    right: r.tp(),
+                                    line: operator.line,
+                                });
+                            }
+                        }
+                    }
+                    // Plus is special, since it works on numbers or strings.
+                    BinaryOperatorType::Plus => match (left, right) {
+                        (V::Number(l), V::Number(r)) => V::Number(l + r),
+                        (V::String(l), V::String(r)) => V::String(l + &r),
                         (l, r) => {
-                            // If at least one operator isn't a number, that's invalid.
                             return Err(RuntimeError::BinaryOpTypeError {
                                 operator,
                                 left: l.tp(),
                                 right: r.tp(),
                                 line: operator.line,
-                            });
+                            })
                         }
-                    }
+                    },
+                    BinaryOperatorType::BangEqual => V::Boolean(left != right),
+                    BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
-                // Plus is special, since it works on numbers or strings.
-                BinaryOperatorType::Plus => match (left, right) {
-                    (V::Number(l), V::Number(r)) => V::Number(l + r),
-                    (V::String(l), V::String(r)) => V::String(l + &r),
-                    (l, r) => {
-                        return Err(RuntimeError::BinaryOpTypeError {
-                            operator,
-                            left: l.tp(),
-                            right: r.tp(),
-                            line: operator.line,
-                        })
-                    }
-                },
-                BinaryOperatorType::BangEqual => V::Boolean(left != right),
-                BinaryOperatorType::EqualEqual => V::Boolean(left == right),
             }
-        }
-    };
-    Ok(evaluated)
+        };
+        Ok(evaluated)
+    }
 }
 
 #[cfg(test)]
@@ -130,6 +157,8 @@ mod tests {
             );
         }
     }
+
+    // Tests of expression evaluation.
 
     #[test]
     fn literals() {
@@ -403,4 +432,6 @@ mod tests {
         ];
         assert_inputs_resolve(input_and_expected);
     }
+
+    // Tests of statement evaluation.
 }

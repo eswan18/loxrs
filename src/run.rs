@@ -39,7 +39,8 @@ pub fn run_code(code: &str) -> Result<(), LoxError> {
             });
         }
     };
-    match interpret::interpret(ast) {
+    let mut stdout = std::io::stdout();
+    match interpret::interpret(ast, Box::new(stdout)) {
         Ok(value) => value,
         Err(runtime_error) => {
             return Err(LoxError {
