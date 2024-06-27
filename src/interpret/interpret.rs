@@ -23,18 +23,18 @@ impl Interpreter {
 
     pub fn interpret(&mut self, ast: Ast) -> Result<(), RuntimeError> {
         for stmt in ast {
-            eval_stmt(stmt)?;
+            self.eval_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn eval_stmt(stmt: Stmt) -> Result<(), RuntimeError> {
+    fn eval_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expression(expr) => {
-                eval_expr(expr)?;
+                self.eval_expr(expr)?;
             }
             Stmt::Print(expr) => {
-                let value = eval_expr(expr)?;
+                let value = self.eval_expr(expr)?;
                 let mut stdout: Box<dyn Write> = Box::new(std::io::stdout());
                 writeln!(stdout, "{}", value).map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
@@ -43,12 +43,12 @@ impl Interpreter {
     }
 
     /// Evaluate the given expression and return the result.
-    fn eval_expr(expr: Expr) -> Result<V, RuntimeError> {
+    fn eval_expr(&mut self, expr: Expr) -> Result<V, RuntimeError> {
         let evaluated = match expr {
             Expr::Literal { value } => V::new_from_literal(value),
-            Expr::Grouping { expression } => eval_expr(*expression)?,
+            Expr::Grouping { expression } => self.eval_expr(*expression)?,
             Expr::Unary { operator, right } => {
-                let right_val = eval_expr(*right)?;
+                let right_val = self.eval_expr(*right)?;
                 match operator.tp {
                     UnaryOperatorType::Minus => match right_val {
                         V::Number(n) => V::Number(-n),
@@ -68,8 +68,8 @@ impl Interpreter {
                 operator,
                 right,
             } => {
-                let left = eval_expr(*left)?;
-                let right = eval_expr(*right)?;
+                let left = self.eval_expr(*left)?;
+                let right = self.eval_expr(*right)?;
                 match operator.tp {
                     // Arithmetic and comparison operators that always require two numbers.
                     BinaryOperatorType::Minus
@@ -131,6 +131,32 @@ mod tests {
     use crate::parse::parse;
     use crate::scan::scan;
     use crate::value::LoxType;
+    use std::string::FromUtf8Error;
+
+    struct MockWriter {
+        written: Vec<u8>,
+    }
+
+    impl MockWriter {
+        pub fn new() -> Self {
+            MockWriter { written: vec![] }
+        }
+        /// Fetch whatever bytes have been written, as a String.
+        pub fn written_string(&self) -> Result<String, FromUtf8Error> {
+            String::from_utf8(self.written.clone())
+        }
+    }
+
+    impl Write for MockWriter {
+        fn write(&mut self, to_write: &[u8]) -> Result<usize, std::io::Error> {
+            // Append whatever string is written to the string
+            self.written.extend(to_write);
+            Ok(0)
+        }
+        fn flush(&mut self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+    }
 
     /// Evaluate a given input string that represents an expression, panicking if scanning or parsing fails.
     fn eval_str(input: &str) -> Result<V, RuntimeError> {
@@ -138,12 +164,13 @@ mod tests {
         let input = format!("{};", input);
         let tokens = scan(input).unwrap();
         let stmts = parse(tokens).unwrap();
+        let mut interpreter = Interpreter::new(Box::new(MockWriter::new()));
         // We expect the AST to contain a single expression.
         let expr = match stmts[0].clone() {
             Stmt::Expression(expr) => expr,
             _ => panic!("Expected an expression statement"),
         };
-        eval_expr(expr)
+        interpreter.eval_expr(expr)
     }
 
     /// Assert that a set of inputs produce the corresponding outputs when evaluated.
