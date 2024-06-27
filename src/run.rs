@@ -33,10 +33,16 @@ pub fn run_code(code: &str) -> Result<(), LoxError> {
     };
     let ast = match parse::parse(tokens) {
         Ok(ast) => ast,
-        Err(parse_error) => {
+        Err(parse_errors) => {
+            // Join the errors into a single string, separated by newlines.
+            let err_text = parse_errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<String>>()
+                .join("\n");
             return Err(LoxError {
                 exit_code: 65,
-                text: parse_error.to_string(),
+                text: err_text,
             });
         }
     };

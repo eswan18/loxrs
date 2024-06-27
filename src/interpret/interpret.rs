@@ -35,7 +35,8 @@ impl<W: Write> Interpreter<W> {
             }
             Stmt::Print(expr) => {
                 let value = self.eval_expr(expr)?;
-                writeln!(self.writer, "{}", value).map_err(|io_err| RuntimeError::IOError(io_err))?;
+                writeln!(self.writer, "{}", value)
+                    .map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
         }
         Ok(())

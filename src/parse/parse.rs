@@ -5,9 +5,7 @@ use crate::ast::{
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
 
-type ParseResult<T> = Result<T, ParseError>;
-
-pub fn parse(tokens: Vec<Token>) -> ParseResult<Ast> {
+pub fn parse(tokens: Vec<Token>) -> Result<Ast, Vec<ParseError>> {
     let mut parser = Parser::new(tokens);
     parser.parse()
 }
@@ -22,21 +20,54 @@ impl Parser {
         Parser { tokens, current: 0 }
     }
 
-    fn parse(&mut self) -> ParseResult<Vec<Stmt>> {
+    fn parse(&mut self) -> Result<Vec<Stmt>, Vec<ParseError>> {
         let mut stmts: Vec<Stmt> = Vec::new();
+        let mut errors: Vec<ParseError> = Vec::new();
         while !self.is_at_end() {
-            match self.parse_statement() {
+            match self.parse_declaration() {
                 Ok(stmt) => stmts.push(stmt),
-                Err(err) => return Err(err),
+                Err(err) => {
+                    errors.push(err);
+                    self.synchronize();
+                }
             }
         }
-        Ok(stmts)
+        if errors.len() > 0 {
+            Err(errors)
+        } else {
+            Ok(stmts)
+        }
     }
 
     // Parsing statements
 
-    /// Parse any statement.
-    fn parse_statement(&mut self) -> ParseResult<Stmt> {
+    fn parse_declaration(&mut self) -> Result<Stmt, ParseError> {
+        match self.advance_on_match(&[TokenType::Var]) {
+            Some(_) => self.parse_var_declaration(),
+            None => self.parse_statement(),
+        }
+    }
+
+    /// Parse a variable declaration.
+    fn parse_var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = match self.advance_on_match(&[TokenType::Identifier]) {
+            Some(token) => token.lexeme.clone(),
+            None => {
+                let line = self.peek().unwrap().line;
+                return Err(ParseError::ExpectedIdentifier { line });
+            }
+        };
+        // Check if there is an initial value (which is optional).
+        let mut initializer: Option<Expr> = None;
+        if let Some(_) = self.advance_on_match(&[TokenType::Equal]) {
+            let expr = self.parse_expression()?;
+            initializer = Some(expr);
+        }
+        Ok(Stmt::Var { name, initializer })
+    }
+
+    /// Parse any non-declaration statement.
+    fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
         if self.check_current_token_type(&[TokenType::Print]) {
             self.advance(); // Consume the Print token.
             self.parse_print_statement()
@@ -46,36 +77,34 @@ impl Parser {
     }
 
     /// Parse a print statement.
-    fn parse_print_statement(&mut self) -> ParseResult<Stmt> {
+    fn parse_print_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.parse_expression()?;
         let line = self.peek().unwrap().line;
-        if self.advance_on_match(&[TokenType::Semicolon]) {
-            Ok(Stmt::Print(expr))
-        } else {
-            Err(ParseError::ExpectedSemicolon { line })
+        match self.advance_on_match(&[TokenType::Semicolon]) {
+            Some(_) => Ok(Stmt::Print(expr)),
+            None => Err(ParseError::ExpectedSemicolon { line }),
         }
     }
 
     /// Parse an expression statement.
-    fn parse_expression_statement(&mut self) -> ParseResult<Stmt> {
+    fn parse_expression_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.parse_expression()?;
         let line = self.peek().unwrap().line;
-        if self.advance_on_match(&[TokenType::Semicolon]) {
-            Ok(Stmt::Expression(expr))
-        } else {
-            Err(ParseError::ExpectedSemicolon { line })
+        match self.advance_on_match(&[TokenType::Semicolon]) {
+            Some(_) => Ok(Stmt::Expression(expr)),
+            None => Err(ParseError::ExpectedSemicolon { line }),
         }
     }
 
     // Parsing expressions
 
     /// Parse any expression.
-    fn parse_expression(&mut self) -> ParseResult<Expr> {
+    fn parse_expression(&mut self) -> Result<Expr, ParseError> {
         self.parse_equality()
     }
 
     /// Parse equality checking expressions.
-    fn parse_equality(&mut self) -> ParseResult<Expr> {
+    fn parse_equality(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.parse_comparison()?;
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
@@ -103,7 +132,7 @@ impl Parser {
     }
 
     /// Parse binary comparison expressions.
-    fn parse_comparison(&mut self) -> ParseResult<Expr> {
+    fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.parse_term()?;
 
         let comparison_operators = [
@@ -138,7 +167,7 @@ impl Parser {
     }
 
     /// Parse addition and subtraction expressions.
-    fn parse_term(&mut self) -> ParseResult<Expr> {
+    fn parse_term(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.parse_factor()?;
 
         let term_operators = [TokenType::Minus, TokenType::Plus];
@@ -166,7 +195,7 @@ impl Parser {
     }
 
     /// Parse multiplication and division expressions.
-    fn parse_factor(&mut self) -> ParseResult<Expr> {
+    fn parse_factor(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.parse_unary()?;
 
         let factor_operators = [TokenType::Slash, TokenType::Star];
@@ -194,7 +223,7 @@ impl Parser {
     }
 
     /// Parse unary expressions.
-    fn parse_unary(&mut self) -> ParseResult<Expr> {
+    fn parse_unary(&mut self) -> Result<Expr, ParseError> {
         let unary_operators = [TokenType::Bang, TokenType::Minus];
         if self.check_current_token_type(&unary_operators) {
             // Unwrapping here is safe because we just checked that the token is one of these.
@@ -219,7 +248,7 @@ impl Parser {
     }
 
     /// Parse primary expressions.
-    fn parse_primary(&mut self) -> ParseResult<Expr> {
+    fn parse_primary(&mut self) -> Result<Expr, ParseError> {
         let token = self.peek().unwrap();
         let literal_expr = match &token.tp {
             TokenType::False => Some(Expr::Literal {
@@ -246,7 +275,7 @@ impl Parser {
         }
 
         // If we didn't match anything yet, look for a grouping expression.
-        if self.advance_on_match(&[TokenType::LeftParen]) {
+        if let Some(_) = self.advance_on_match(&[TokenType::LeftParen]) {
             let expr = self.parse_expression()?;
             match self.peek() {
                 Some(token) if token.tp == TokenType::RightParen => {
@@ -300,12 +329,11 @@ impl Parser {
 
     // Helper methods for parsing.
 
-    fn advance_on_match(&mut self, token_types: &[TokenType]) -> bool {
+    fn advance_on_match(&mut self, token_types: &[TokenType]) -> Option<&Token> {
         if self.check_current_token_type(token_types) {
-            self.advance();
-            true
+            return Some(self.advance());
         } else {
-            false
+            return None;
         }
     }
 
