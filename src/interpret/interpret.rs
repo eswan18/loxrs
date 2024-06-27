@@ -1,6 +1,6 @@
 use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
-use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
+use crate::interpret::environment::Environment;
 use crate::value::LoxValue as V;
 use std::io::Write;
 
@@ -21,10 +21,7 @@ struct Interpreter<W: Write> {
 
 impl<W: Write> Interpreter<W> {
     pub fn new(writer: W) -> Self {
-        Self {
-            writer,
-            environment: Environment::new(),
-        }
+        Self { writer, environment: Environment::new() }
     }
 
     pub fn interpret(&mut self, ast: Ast) -> Result<(), RuntimeError> {
@@ -43,14 +40,14 @@ impl<W: Write> Interpreter<W> {
                 let value = self.eval_expr(expr)?;
                 writeln!(self.writer, "{}", value)
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
-            }
+            },
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
                     Some(expr) => self.eval_expr(expr)?,
                     None => V::Nil,
                 };
                 self.environment.define(&name, value);
-            }
+            },
         }
         Ok(())
     }
@@ -131,11 +128,13 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::BangEqual => V::Boolean(left != right),
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
-            }
-            Expr::Variable { name } => match self.environment.get(&name) {
-                Some(v) => v.clone(),
-                None => return Err(RuntimeError::UndefinedVariable(name)),
             },
+            Expr::Variable { name } => {
+                match self.environment.get(&name) {
+                    Some(v) => v.clone(),
+                    None => return Err(RuntimeError::UndefinedVariable(name)),
+                }
+            }
         };
         Ok(evaluated)
     }
@@ -479,7 +478,7 @@ mod tests {
 
     #[test]
     fn simple_variables() {
-        let output = exec_ast("var x = 123; print 4; print x;").unwrap();
-        assert_eq!(output, "4\n123\n");
+        let output = exec_ast("var x = 123; var y = 4; print 5; print x + y;").unwrap();
+        assert_eq!(output, "5\n127\n");
     }
 }
