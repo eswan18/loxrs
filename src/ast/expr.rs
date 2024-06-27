@@ -71,7 +71,7 @@ impl Display for UnaryOperatorType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
     Number(f64),
     String(String),
@@ -79,7 +79,7 @@ pub enum LiteralValue {
     Nil,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,

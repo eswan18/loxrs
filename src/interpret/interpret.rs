@@ -1,21 +1,28 @@
-use crate::expr::{BinaryOperatorType, Expr, UnaryOperatorType};
+use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 
-/// Interpret the given expression.
+/// Interpret the given AST.
 //
 /// This is a thin wrapper over the non-public eval function.
-pub fn interpret(expr: Expr) -> Result<V, RuntimeError> {
-    eval(expr)
+pub fn interpret(ast: Ast) -> Result<(), RuntimeError> {
+    for stmt in ast {
+        eval_stmt(stmt)?;
+    }
+    Ok(())
+}
+
+fn eval_stmt(stmt: Stmt) -> Result<(), RuntimeError> {
+    todo!();
 }
 
 /// Evaluate the given expression and return the result.
-fn eval(expr: Expr) -> Result<V, RuntimeError> {
+fn eval_expr(expr: Expr) -> Result<V, RuntimeError> {
     let evaluated = match expr {
         Expr::Literal { value } => V::new_from_literal(value),
-        Expr::Grouping { expression } => eval(*expression)?,
+        Expr::Grouping { expression } => eval_expr(*expression)?,
         Expr::Unary { operator, right } => {
-            let right_val = eval(*right)?;
+            let right_val = eval_expr(*right)?;
             match operator.tp {
                 UnaryOperatorType::Minus => match right_val {
                     V::Number(n) => V::Number(-n),
@@ -35,8 +42,8 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
             operator,
             right,
         } => {
-            let left = eval(*left)?;
-            let right = eval(*right)?;
+            let left = eval_expr(*left)?;
+            let right = eval_expr(*right)?;
             match operator.tp {
                 // Arithmetic and comparison operators that always require two numbers.
                 BinaryOperatorType::Minus
@@ -93,17 +100,23 @@ fn eval(expr: Expr) -> Result<V, RuntimeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::{BinaryOperator, UnaryOperator};
+    use crate::ast::{BinaryOperator, UnaryOperator};
     use crate::parse::parse;
     use crate::scan::scan;
-    use crate::token::{Token, TokenType};
     use crate::value::LoxType;
 
-    /// Evaluate the given input string, panicking if scanning or parsing fails.
+    /// Evaluate a given input string that represents an expression, panicking if scanning or parsing fails.
     fn eval_str(input: &str) -> Result<V, RuntimeError> {
-        let tokens = scan(input.to_string()).unwrap();
-        let ast = parse(tokens).unwrap();
-        interpret(ast)
+        // Add a semicolon to make the input a valid statement (otherwise the parser will be upset).
+        let input = format!("{};", input);
+        let tokens = scan(input).unwrap();
+        let stmts = parse(tokens).unwrap();
+        // We expect the AST to contain a single expression.
+        let expr = match stmts[0].clone() {
+            Stmt::Expression(expr) => expr,
+            _ => panic!("Expected an expression statement"),
+        };
+        eval_expr(expr)
     }
 
     /// Assert that a set of inputs produce the corresponding outputs when evaluated.

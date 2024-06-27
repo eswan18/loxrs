@@ -4,6 +4,7 @@ use std::fmt;
 pub enum ParseError {
     MissingRightParen { line: u32 },
     ExtraInput { line: u32 },
+    ExpectedSemicolon { line: u32 },
 }
 
 impl fmt::Display for ParseError {
@@ -14,6 +15,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::ExtraInput { line } => {
                 write!(f, "ParseError [line {}]: Extra input", line)
+            }
+            ParseError::ExpectedSemicolon { line } => {
+                write!(f, "ParseError [line {}]: Expected ';'", line)
             }
         }
     }

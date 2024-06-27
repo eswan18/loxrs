@@ -2,9 +2,8 @@ use crate::error::LoxError;
 use crate::interpret;
 use crate::parse;
 use crate::scan;
-use crate::value::LoxValue;
 
-pub fn run_code(code: &str) -> Result<LoxValue, LoxError> {
+pub fn run_code(code: &str) -> Result<(), LoxError> {
     let tokens = match scan::scan(code.to_string()) {
         Ok(tokens) => tokens,
         Err(scan_errors) => {
@@ -40,7 +39,7 @@ pub fn run_code(code: &str) -> Result<LoxValue, LoxError> {
             });
         }
     };
-    let value = match interpret::interpret(ast) {
+    match interpret::interpret(ast) {
         Ok(value) => value,
         Err(runtime_error) => {
             return Err(LoxError {
@@ -49,5 +48,5 @@ pub fn run_code(code: &str) -> Result<LoxValue, LoxError> {
             });
         }
     };
-    Ok(value)
+    Ok(())
 }

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::expr::{BinaryOperator, UnaryOperator};
+use crate::ast::{BinaryOperator, UnaryOperator};
 use crate::value::LoxType;
 
 #[derive(Debug, Clone, PartialEq)]

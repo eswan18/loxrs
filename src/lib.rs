@@ -3,8 +3,8 @@ use std::io;
 use std::io::BufRead;
 use std::io::Write;
 
+mod ast;
 mod error;
-mod expr;
 mod interpret;
 mod parse;
 mod run;
@@ -43,16 +43,10 @@ pub fn run_repl() -> Result<(), i32> {
             // Allows us to exit on ctrl-D.
             break;
         }
-        match run::run_code(&buffer) {
-            Ok(value) => {
-                // If all goes well, print results.
-                println!("{}", value);
-            }
-            Err(e) => {
-                // If an error is encountered, print it to stderr.
-                eprintln!("{}", e);
-            }
-        };
+        if let Err(e) = run::run_code(&buffer) {
+            // If an error is encountered, print it to stderr.
+            eprintln!("{}", e);
+        }
         buffer.clear();
     }
     Ok(())

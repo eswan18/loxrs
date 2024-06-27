@@ -1,14 +1,15 @@
-use crate::expr::{
-    BinaryOperator, BinaryOperatorType, Expr, LiteralValue, UnaryOperator, UnaryOperatorType,
+use crate::ast::{
+    Ast, BinaryOperator, BinaryOperatorType, Expr, LiteralValue, Stmt, UnaryOperator,
+    UnaryOperatorType,
 };
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
 
-type ParseResult = Result<Expr, ParseError>;
+type ParseResult<T> = Result<T, ParseError>;
 
-pub fn parse(tokens: Vec<Token>) -> ParseResult {
+pub fn parse(tokens: Vec<Token>) -> ParseResult<Ast> {
     let mut parser = Parser::new(tokens);
-    parser.parse_expression()
+    parser.parse()
 }
 
 struct Parser {
@@ -21,15 +22,60 @@ impl Parser {
         Parser { tokens, current: 0 }
     }
 
-    // Parse methods for specific expressions.
+    fn parse(&mut self) -> ParseResult<Vec<Stmt>> {
+        let mut stmts: Vec<Stmt> = Vec::new();
+        while !self.is_at_end() {
+            match self.parse_statement() {
+                Ok(stmt) => stmts.push(stmt),
+                Err(err) => return Err(err),
+            }
+        }
+        Ok(stmts)
+    }
+
+    // Parsing statements
+
+    /// Parse any statement.
+    fn parse_statement(&mut self) -> ParseResult<Stmt> {
+        if self.check_current_token_type(&[TokenType::Print]) {
+            self.advance(); // Consume the Print token.
+            self.parse_print_statement()
+        } else {
+            self.parse_expression_statement()
+        }
+    }
+
+    /// Parse a print statement.
+    fn parse_print_statement(&mut self) -> ParseResult<Stmt> {
+        let expr = self.parse_expression()?;
+        let line = self.peek().unwrap().line;
+        if self.advance_on_match(&[TokenType::Semicolon]) {
+            Ok(Stmt::Print(expr))
+        } else {
+            Err(ParseError::ExpectedSemicolon { line })
+        }
+    }
+
+    /// Parse an expression statement.
+    fn parse_expression_statement(&mut self) -> ParseResult<Stmt> {
+        let expr = self.parse_expression()?;
+        let line = self.peek().unwrap().line;
+        if self.advance_on_match(&[TokenType::Semicolon]) {
+            Ok(Stmt::Expression(expr))
+        } else {
+            Err(ParseError::ExpectedSemicolon { line })
+        }
+    }
+
+    // Parsing expressions
 
     /// Parse any expression.
-    fn parse_expression(&mut self) -> ParseResult {
+    fn parse_expression(&mut self) -> ParseResult<Expr> {
         self.parse_equality()
     }
 
     /// Parse equality checking expressions.
-    fn parse_equality(&mut self) -> ParseResult {
+    fn parse_equality(&mut self) -> ParseResult<Expr> {
         let mut expr = self.parse_comparison()?;
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
@@ -57,7 +103,7 @@ impl Parser {
     }
 
     /// Parse binary comparison expressions.
-    fn parse_comparison(&mut self) -> ParseResult {
+    fn parse_comparison(&mut self) -> ParseResult<Expr> {
         let mut expr = self.parse_term()?;
 
         let comparison_operators = [
@@ -92,7 +138,7 @@ impl Parser {
     }
 
     /// Parse addition and subtraction expressions.
-    fn parse_term(&mut self) -> ParseResult {
+    fn parse_term(&mut self) -> ParseResult<Expr> {
         let mut expr = self.parse_factor()?;
 
         let term_operators = [TokenType::Minus, TokenType::Plus];
@@ -120,7 +166,7 @@ impl Parser {
     }
 
     /// Parse multiplication and division expressions.
-    fn parse_factor(&mut self) -> ParseResult {
+    fn parse_factor(&mut self) -> ParseResult<Expr> {
         let mut expr = self.parse_unary()?;
 
         let factor_operators = [TokenType::Slash, TokenType::Star];
@@ -148,7 +194,7 @@ impl Parser {
     }
 
     /// Parse unary expressions.
-    fn parse_unary(&mut self) -> ParseResult {
+    fn parse_unary(&mut self) -> ParseResult<Expr> {
         let unary_operators = [TokenType::Bang, TokenType::Minus];
         if self.check_current_token_type(&unary_operators) {
             // Unwrapping here is safe because we just checked that the token is one of these.
@@ -173,7 +219,7 @@ impl Parser {
     }
 
     /// Parse primary expressions.
-    fn parse_primary(&mut self) -> ParseResult {
+    fn parse_primary(&mut self) -> ParseResult<Expr> {
         let token = self.peek().unwrap();
         let literal_expr = match &token.tp {
             TokenType::False => Some(Expr::Literal {
@@ -277,7 +323,7 @@ impl Parser {
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.tokens.len()
+        self.tokens[self.current].tp == TokenType::Eof
     }
 
     fn peek(&self) -> Option<&Token> {
@@ -298,6 +344,10 @@ mod tests {
     use super::*;
     use crate::scan::scan;
 
+    ////////////////
+    // Expressions
+    ////////////////
+
     #[test]
     fn simple_input() {
         let tokens = vec![
@@ -317,66 +367,66 @@ mod tests {
                 line: 1,
             },
         ];
-        let ast = parse(tokens).unwrap();
-        let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(+ 1 2)");
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(+ 1 2)");
     }
 
     #[test]
     fn order_of_arithmetic() {
         let input = "4 + (3 + 45) * 6;";
         let tokens = scan(input.to_string()).unwrap();
-        let ast = parse(tokens).unwrap();
-        let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(+ 4 (* ((+ 3 45)) 6))");
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(+ 4 (* ((+ 3 45)) 6))");
     }
 
     #[test]
     fn ungrouped_arithmetic() {
         let input = "4 * 3 + 6 / 9;";
         let tokens = scan(input.to_string()).unwrap();
-        let ast = parse(tokens).unwrap();
-        let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(+ (* 4 3) (/ 6 9))");
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(+ (* 4 3) (/ 6 9))");
     }
 
     #[test]
     fn comparisons() {
         let input = "9 - 4 < 4 * 3 / 9";
         let tokens = scan(input.to_string()).unwrap();
-        let ast = parse(tokens).unwrap();
-        let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(< (- 9 4) (/ (* 4 3) 9))");
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(< (- 9 4) (/ (* 4 3) 9))");
     }
 
     #[test]
     fn equality() {
         let input = "4 != 5 == 6";
         let tokens = scan(input.to_string()).unwrap();
-        let ast = parse(tokens).unwrap();
-        let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(== (!= 4 5) 6)");
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(== (!= 4 5) 6)");
     }
 
     #[test]
     fn unary() {
         let input = "!true == -5";
         let tokens = scan(input.to_string()).unwrap();
-        let ast = parse(tokens).unwrap();
-        let ast_str = format!("{}", ast);
-        assert_eq!(ast_str, "(== (! true) (- 5))");
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(== (! true) (- 5))");
     }
 
     #[test]
     fn error_missing_right_paren() {
         let input = "(4 + 5";
         let tokens = scan(input.to_string()).unwrap();
-        let error = parse(tokens).unwrap_err();
+        let error = Parser::new(tokens).parse_expression().unwrap_err();
         assert_eq!(error, ParseError::MissingRightParen { line: 1 });
 
         let input = "\n\n(((3 + 4) *5) * 6";
         let tokens = scan(input.to_string()).unwrap();
-        let error = parse(tokens).unwrap_err();
+        let error = Parser::new(tokens).parse_expression().unwrap_err();
         assert_eq!(error, ParseError::MissingRightParen { line: 3 });
     }
 
@@ -384,7 +434,43 @@ mod tests {
     fn error_extra_input() {
         let input = "4 + 5 +";
         let tokens = scan(input.to_string()).unwrap();
-        let error = parse(tokens).unwrap_err();
+        let error = Parser::new(tokens).parse_expression().unwrap_err();
         assert_eq!(error, ParseError::ExtraInput { line: 1 });
+    }
+
+    ////////////////
+    // Statements
+    ////////////////
+
+    #[test]
+    fn expr_statement() {
+        let input = "4 + 5;";
+        let tokens = scan(input.to_string()).unwrap();
+        let smts = parse(tokens).unwrap();
+        assert_eq!(smts.len(), 1);
+        let stmt_str = format!("{}", smts[0]);
+        assert_eq!(stmt_str, "(+ 4 5);");
+    }
+
+    #[test]
+    fn multiline_expr_stmt() {
+        let input = "4 + 5;\n\n3 * true;";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 2);
+        let stmt0_str = format!("{}", stmts[0]);
+        let stmt1_str = format!("{}", stmts[1]);
+        assert_eq!(stmt0_str, "(+ 4 5);");
+        assert_eq!(stmt1_str, "(* 3 true);");
+    }
+
+    #[test]
+    fn print_stmt() {
+        let input = "print 4 + 5;";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt_str = format!("{}", stmts[0]);
+        assert_eq!(stmt_str, "Print((+ 4 5));");
     }
 }
