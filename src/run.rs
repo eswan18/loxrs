@@ -2,7 +2,6 @@ use crate::error::LoxError;
 use crate::interpret;
 use crate::parse;
 use crate::scan;
-use std::io::Write;
 
 pub fn run_code(code: &str) -> Result<(), LoxError> {
     let tokens = match scan::scan(code.to_string()) {

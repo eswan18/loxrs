@@ -17,6 +17,7 @@ pub enum RuntimeError {
         line: u32,
     },
     IOError(std::io::Error),
+    UndefinedVariable(String),
 }
 
 impl PartialEq for RuntimeError {
@@ -51,6 +52,7 @@ impl PartialEq for RuntimeError {
             (RuntimeError::IOError(err1), RuntimeError::IOError(err2)) => {
                 err1.kind() == err2.kind()
             }
+            (RuntimeError::UndefinedVariable(v1), RuntimeError::UndefinedVariable(v2)) => v1 == v2,
             _ => false,
         }
     }
@@ -83,6 +85,9 @@ impl fmt::Display for RuntimeError {
                 write!(f, "BinaryOpTypeError [line {}]: {}", line, err_msg)
             }
             RuntimeError::IOError(err) => write!(f, "IOError: {}", err),
+            RuntimeError::UndefinedVariable(name) => {
+                write!(f, "Undefined variable '{}'", name)
+            }
         }
     }
 }

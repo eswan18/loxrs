@@ -1,4 +1,5 @@
 use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
+use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 use std::io::Write;
@@ -14,11 +15,16 @@ pub fn interpret<W: Write>(ast: Ast, writer: W) -> Result<(), RuntimeError> {
 struct Interpreter<W: Write> {
     // Where to direct the output of "print"
     writer: W,
+    // The environment stores variables values.
+    environment: Environment,
 }
 
 impl<W: Write> Interpreter<W> {
     pub fn new(writer: W) -> Self {
-        Self { writer }
+        Self {
+            writer,
+            environment: Environment::new(),
+        }
     }
 
     pub fn interpret(&mut self, ast: Ast) -> Result<(), RuntimeError> {
@@ -37,6 +43,13 @@ impl<W: Write> Interpreter<W> {
                 let value = self.eval_expr(expr)?;
                 writeln!(self.writer, "{}", value)
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
+            }
+            Stmt::Var { name, initializer } => {
+                let value = match initializer {
+                    Some(expr) => self.eval_expr(expr)?,
+                    None => V::Nil,
+                };
+                self.environment.define(&name, value);
             }
         }
         Ok(())
@@ -119,6 +132,10 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
             }
+            Expr::Variable { name } => match self.environment.get(&name) {
+                Some(v) => v.clone(),
+                None => return Err(RuntimeError::UndefinedVariable(name)),
+            },
         };
         Ok(evaluated)
     }
@@ -458,5 +475,11 @@ mod tests {
     fn multiline_print_stmt() {
         let output = exec_ast("print 123 + 456;\ntrue != true;\nprint 3 > 4;").unwrap();
         assert_eq!(output, "579\nfalse\n");
+    }
+
+    #[test]
+    fn simple_variables() {
+        let output = exec_ast("var x = 123; print 4; print x;").unwrap();
+        assert_eq!(output, "4\n123\n");
     }
 }

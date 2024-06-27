@@ -63,7 +63,15 @@ impl Parser {
             let expr = self.parse_expression()?;
             initializer = Some(expr);
         }
-        Ok(Stmt::Var { name, initializer })
+        let stmt = Stmt::Var { name, initializer };
+        // Consume the semicolon.
+        match self.advance_on_match(&[TokenType::Semicolon]) {
+            Some(_) => Ok(stmt),
+            None => {
+                let line = self.peek().unwrap().line;
+                return Err(ParseError::ExpectedSemicolon { line });
+            }
+        }
     }
 
     /// Parse any non-declaration statement.
@@ -274,6 +282,12 @@ impl Parser {
             return Ok(expr);
         }
 
+        if let Some(id_token) = self.advance_on_match(&[TokenType::Identifier]) {
+            return Ok(Expr::Variable {
+                name: id_token.lexeme.clone(),
+            });
+        }
+
         // If we didn't match anything yet, look for a grouping expression.
         if let Some(_) = self.advance_on_match(&[TokenType::LeftParen]) {
             let expr = self.parse_expression()?;
@@ -303,7 +317,7 @@ impl Parser {
 
     /// Move the current position to the next beginning of a statement.
     fn synchronize(&mut self) -> () {
-        loop {
+        while !self.is_at_end() {
             let t = match self.peek() {
                 Some(token) => token,
                 None => return,
@@ -500,5 +514,26 @@ mod tests {
         assert_eq!(stmts.len(), 1);
         let stmt_str = format!("{}", stmts[0]);
         assert_eq!(stmt_str, "Print((+ 4 5));");
+    }
+
+    #[test]
+    fn var_decl_stmt() {
+        let input = "var x = 4 + 5;";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt_str = format!("{}", stmts[0]);
+        assert_eq!(stmt_str, "var x = (+ 4 5);");
+    }
+
+    #[test]
+    fn missing_semicolon() {
+        let inputs = ["var x = 4 + 5", "print 4 + 5", "4 + 5"];
+        for input in inputs {
+            let tokens = scan(input.to_string()).unwrap();
+            let error = parse(tokens).unwrap_err();
+            assert_eq!(error.len(), 1);
+            assert_eq!(error[0], ParseError::ExpectedSemicolon { line: 1 });
+        }
     }
 }

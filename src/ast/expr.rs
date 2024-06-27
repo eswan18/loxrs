@@ -96,6 +96,9 @@ pub enum Expr {
         operator: UnaryOperator,
         right: Box<Expr>,
     },
+    Variable {
+        name: String,
+    },
 }
 
 impl Display for Expr {
@@ -113,12 +116,15 @@ impl Display for Expr {
             }
             Expr::Literal { value } => match value {
                 LiteralValue::Number(n) => write!(f, "{}", n),
-                LiteralValue::String(s) => write!(f, "{}", s),
+                LiteralValue::String(s) => write!(f, "\"{}\"", s),
                 LiteralValue::Boolean(b) => write!(f, "{}", b),
                 LiteralValue::Nil => write!(f, "nil"),
             },
             Expr::Unary { operator, right } => {
                 write!(f, "({} {})", operator, right)
+            }
+            Expr::Variable { name } => {
+                write!(f, "{}", name)
             }
         }
     }

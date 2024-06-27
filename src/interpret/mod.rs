@@ -1,3 +1,4 @@
+mod environment;
 mod interpret;
 mod runtime_error;
 
