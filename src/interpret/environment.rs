@@ -7,18 +7,15 @@ use crate::interpret::RuntimeError;
 
 #[derive(Debug)]
 pub struct Environment {
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    pub enclosing: Option<Rc<RefCell<Environment>>>,
     values: HashMap<String, LoxValue>,
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<Environment>) -> Self {
+    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Self {
         Environment {
             values: HashMap::new(),
-            enclosing: match enclosing {
-                Some(e) => Some(Rc::new(RefCell::new(e))),
-                None => None,
-            },
+            enclosing,
         }
     }
 
@@ -54,19 +51,6 @@ impl Environment {
             } else {
                 Err(RuntimeError::UndefinedVariable(name.to_string()))
             }
-        }
-    }
-
-    /// Set the enclosing environment.
-    pub fn set_enclosing(&mut self, enclosing: Environment) {
-        self.enclosing = Some(Rc::new(RefCell::new(enclosing)));
-    }
-
-    /// Set the enclosing environment to None and give ownership back to the calling code.
-    pub fn unset_enclosing(&mut self) -> Option<Environment> {
-        match self.enclosing.take() {
-            Some(enclosing) => Some(Rc::try_unwrap(enclosing).unwrap().into_inner()),
-            None => None,
         }
     }
 }

@@ -2,21 +2,22 @@ use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
+use std::cell::RefCell;
 use std::io::Write;
-use std::mem;
+use std::rc::Rc;
 
 pub struct Interpreter<W: Write> {
     // Where to direct the output of "print"
     writer: W,
     // The environment stores variables values.
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl<W: Write> Interpreter<W> {
     pub fn new(writer: W) -> Self {
         Self {
             writer,
-            environment: Environment::new(None),
+            environment: Rc::new(RefCell::new(Environment::new(None))),
         }
     }
 
@@ -42,22 +43,20 @@ impl<W: Write> Interpreter<W> {
                     Some(expr) => self.eval_expr(expr)?,
                     None => V::Nil,
                 };
-                self.environment.define(&name, value);
+                self.environment.borrow_mut().define(&name, value);
             }
             Stmt::Block(stmts) => {
-                // We can't take ownership of the current environment, so we initally create the new one with a blank environment.
-                let mut env = Environment::new(None);
-                // Swapping is the only way to move the environment out of self and into env.
-                mem::swap(&mut self.environment, &mut env);
-                // Now self.environment is the new (blank) env, and env is the old one. We can add the original env as enclosing the new one.
-                self.environment.set_enclosing(env);
+                // Keep a reference to the old environment around so we can restore it later.
+                let old_env = self.environment.clone();
+                // Create a new environment enclosed with the old one, and make it our current environment.
+                let new_env = Environment::new(Some(old_env.clone()));
+                self.environment = Rc::new(RefCell::new(new_env));
+                // Evaluate the contained statements in this environment.
                 for stmt in stmts {
                     self.eval_stmt(stmt)?;
                 }
-                // We can safely unwrap here since we just set the enclosing environment above.
-                let mut env = self.environment.unset_enclosing().unwrap();
-                // Finish by swapping back, and finally releasing the "new" environment back to the abyss.
-                mem::swap(&mut env, &mut self.environment);
+                // Reset the environment to the original one.
+                self.environment = old_env;
             }
         }
         Ok(())
@@ -140,13 +139,15 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
             }
-            Expr::Variable { name } => match self.environment.get(&name) {
+            Expr::Variable { name } => match self.environment.borrow().get(&name) {
                 Some(v) => v,
                 None => return Err(RuntimeError::UndefinedVariable(name)),
             },
             Expr::Assignment { name, value } => {
                 let evaluated = self.eval_expr(*value)?;
-                self.environment.assign(&name, evaluated.clone())?;
+                self.environment
+                    .borrow_mut()
+                    .assign(&name, evaluated.clone())?;
                 evaluated
             }
         };
