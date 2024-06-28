@@ -159,6 +159,7 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
             }
+            Expr::Call { .. } => todo!(),
             Expr::Variable { name } => match self.environment.borrow().get(&name) {
                 Some(v) => v,
                 None => return Err(RuntimeError::UndefinedVariable(name)),

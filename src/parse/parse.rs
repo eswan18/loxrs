@@ -442,7 +442,50 @@ impl Parser {
                 right: Box::new(right),
             });
         }
-        self.parse_primary()
+        self.parse_call()
+    }
+
+    fn parse_call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.parse_primary()?;
+
+        loop {
+            if let Some(token) = self.advance_on_match(&[TokenType::LeftParen]) {
+                let line = token.line;
+                let args = self.parse_call_args()?;
+                // Consume the right paren.
+                if self.advance_on_match(&[TokenType::RightParen]).is_none() {
+                    return Err(ParseError::MissingRightParen { line });
+                }
+                expr = Expr::Call {
+                    callee: Box::new(expr),
+                    arguments: args,
+                };
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_call_args(&mut self) -> Result<Vec<Expr>, ParseError> {
+        let mut args: Vec<Expr> = Vec::new();
+        if self.check_current_token_type(&[TokenType::RightParen]) {
+            return Ok(args);
+        }
+        loop {
+            let arg = self.parse_expression()?;
+            args.push(arg);
+            if self.advance_on_match(&[TokenType::Comma]).is_none() {
+                break;
+            }
+        }
+        if args.len() > 255 {
+            return Err(ParseError::TooManyArguments {
+                line: self.peek().unwrap().line,
+            });
+        }
+        Ok(args)
     }
 
     /// Parse primary expressions.
@@ -963,5 +1006,30 @@ mod tests {
             }
             _ => panic!("the only top-level statement in the code should be a while statement"),
         }
+    }
+
+    #[test]
+    fn call() {
+        let input = "abc(3, 4, 5)";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "abc(3, 4, 5)");
+
+        // An empty call.
+        let input = "abc()";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "abc()");
+    }
+
+    #[test]
+    fn error_too_many_args() {
+        let args = (0..=256).map(|_| "1").collect::<Vec<&str>>().join(", ");
+        let func_call_input = format!("abc({});", args);
+        let tokens = scan(func_call_input).unwrap();
+        let error = Parser::new(tokens).parse_expression().unwrap_err();
+        assert_eq!(error, ParseError::TooManyArguments { line: 1 });
     }
 }

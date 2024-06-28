@@ -11,6 +11,7 @@ pub enum ParseError {
     ExpectedLeftParen { line: u32 },
     ExpectedRightParen { line: u32 },
     InvalidAssignmentTarget { expr: Expr, line: u32 },
+    TooManyArguments { line: u32 },
 }
 
 impl fmt::Display for ParseError {
@@ -43,6 +44,9 @@ impl fmt::Display for ParseError {
                     "ParseError [line {}]: Invalid assignment target ({})",
                     line, expr
                 )
+            }
+            ParseError::TooManyArguments { line } => {
+                write!(f, "ParseError [line {}]: Too many arguments", line)
             }
         }
     }

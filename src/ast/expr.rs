@@ -17,6 +17,10 @@ pub enum Expr {
         operator: BinaryOperator,
         right: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -50,6 +54,14 @@ impl Display for Expr {
                 right,
             } => {
                 write!(f, "({} {} {})", operator, left, right)
+            }
+            Expr::Call { callee, arguments } => {
+                let args = arguments
+                    .iter()
+                    .map(|arg| format!("{}", arg))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                write!(f, "{}({})", callee, args)
             }
             Expr::Grouping { expression } => {
                 write!(f, "({})", expression)
