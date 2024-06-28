@@ -11,6 +11,7 @@ pub enum Stmt {
         name: String,
         initializer: Option<expr::Expr>,
     },
+    Block(Vec<Stmt>),
 }
 
 impl Display for Stmt {
@@ -22,6 +23,13 @@ impl Display for Stmt {
                 Some(expr) => write!(f, "var {} = {};", name, expr),
                 None => write!(f, "var {};", name),
             },
+            Stmt::Block(stmts) => {
+                write!(f, "{{\n")?;
+                for stmt in stmts {
+                    write!(f, "{}\n", stmt)?;
+                }
+                write!(f, "}}")
+            }
         }
     }
 }

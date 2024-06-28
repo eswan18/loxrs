@@ -79,6 +79,8 @@ impl Parser {
         if self.check_current_token_type(&[TokenType::Print]) {
             self.advance(); // Consume the Print token.
             self.parse_print_statement()
+        } else if self.check_current_token_type(&[TokenType::LeftBrace]) {
+            self.parse_block()
         } else {
             self.parse_expression_statement()
         }
@@ -101,6 +103,20 @@ impl Parser {
         match self.advance_on_match(&[TokenType::Semicolon]) {
             Some(_) => Ok(Stmt::Expression(expr)),
             None => Err(ParseError::ExpectedSemicolon { line }),
+        }
+    }
+
+    /// Parse a block of statements.
+    fn parse_block(&mut self) -> Result<Stmt, ParseError> {
+        self.advance(); // Consume the '{'
+        let mut stmts: Vec<Stmt> = Vec::new();
+        while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {
+            stmts.push(self.parse_declaration()?);
+        }
+        let block_stmt = Stmt::Block(stmts);
+        match self.advance() {
+            Token { tp, .. } if *tp == TokenType::RightBrace => Ok(block_stmt),
+            Token { line, .. } => Err(ParseError::ExpectedRightBrace { line: *line }),
         }
     }
 
@@ -615,5 +631,20 @@ mod tests {
             assert_eq!(error.len(), 1);
             assert_eq!(error[0], ParseError::ExpectedSemicolon { line: 1 });
         }
+    }
+
+    #[test]
+    fn block_stmt() {
+        let input = "{ var x = 3; 3 + 4; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let inner_stmts = match &stmts[0] {
+            Stmt::Block(stmts) => stmts,
+            _ => panic!("the only top-level statement in the code should be a block"),
+        };
+        assert_eq!(inner_stmts.len(), 2);
+        assert!(matches!(inner_stmts[0], Stmt::Var { .. }));
+        assert!(matches!(inner_stmts[1], Stmt::Expression(_)));
     }
 }

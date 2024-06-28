@@ -3,6 +3,7 @@ use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 use std::io::Write;
+use std::mem;
 
 pub struct Interpreter<W: Write> {
     // Where to direct the output of "print"
@@ -15,7 +16,7 @@ impl<W: Write> Interpreter<W> {
     pub fn new(writer: W) -> Self {
         Self {
             writer,
-            environment: Environment::new(),
+            environment: Environment::new(None),
         }
     }
 
@@ -42,6 +43,21 @@ impl<W: Write> Interpreter<W> {
                     None => V::Nil,
                 };
                 self.environment.define(&name, value);
+            }
+            Stmt::Block(stmts) => {
+                // We can't take ownership of the current environment, so we initally create the new one with a blank environment.
+                let mut env = Environment::new(None);
+                // Swapping is the only way to move the environment out of self and into env.
+                mem::swap(&mut self.environment, &mut env);
+                // Now self.environment is the new (blank) env, and env is the old one. We can add the original env as enclosing the new one.
+                self.environment.set_enclosing(env);
+                for stmt in stmts {
+                    self.eval_stmt(stmt)?;
+                }
+                // We can safely unwrap here since we just set the enclosing environment above.
+                let mut env = self.environment.unset_enclosing().unwrap();
+                // Finish by swapping back, and finally releasing the "new" environment back to the abyss.
+                mem::swap(&mut env, &mut self.environment);
             }
         }
         Ok(())
@@ -125,7 +141,7 @@ impl<W: Write> Interpreter<W> {
                 }
             }
             Expr::Variable { name } => match self.environment.get(&name) {
-                Some(v) => v.clone(),
+                Some(v) => v,
                 None => return Err(RuntimeError::UndefinedVariable(name)),
             },
             Expr::Assignment { name, value } => {

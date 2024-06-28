@@ -7,6 +7,7 @@ pub enum ParseError {
     ExtraInput { line: u32 },
     ExpectedSemicolon { line: u32 },
     ExpectedIdentifier { line: u32 },
+    ExpectedRightBrace { line: u32 },
     InvalidAssignmentTarget { expr: Expr, line: u32 },
 }
 
@@ -24,6 +25,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::ExpectedIdentifier { line } => {
                 write!(f, "ParseError [line {}]: Expected identifier", line)
+            }
+            ParseError::ExpectedRightBrace { line } => {
+                write!(f, "ParseError [line {}]: Expected '}}'", line)
             }
             ParseError::InvalidAssignmentTarget { line, expr } => {
                 write!(
