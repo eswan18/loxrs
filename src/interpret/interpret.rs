@@ -70,7 +70,7 @@ impl<W: Write> Interpreter<W> {
                         if let Some(else_branch) = else_branch {
                             self.eval_stmt(*else_branch)?;
                         };
-                    },
+                    }
                 }
             }
         }
@@ -165,6 +165,7 @@ impl<W: Write> Interpreter<W> {
                     .assign(&name, evaluated.clone())?;
                 evaluated
             }
+            Expr::Logical { .. } => todo!(),
         };
         Ok(evaluated)
     }

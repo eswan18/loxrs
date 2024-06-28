@@ -1,6 +1,6 @@
 use crate::ast::{
-    Ast, BinaryOperator, BinaryOperatorType, Expr, LiteralValue, Stmt, UnaryOperator,
-    UnaryOperatorType,
+    Ast, BinaryOperator, BinaryOperatorType, Expr, LiteralValue, LogicalOperator,
+    LogicalOperatorType, Stmt, UnaryOperator, UnaryOperatorType,
 };
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
@@ -162,7 +162,7 @@ impl Parser {
     }
 
     fn parse_assignment(&mut self) -> Result<Expr, ParseError> {
-        let expr = self.parse_equality()?;
+        let expr = self.parse_or()?;
 
         // If we hit an equals sign, assignment must be intended.
         if let Some(t) = self.advance_on_match(&[TokenType::Equal]) {
@@ -178,6 +178,40 @@ impl Parser {
             };
         }
 
+        Ok(expr)
+    }
+
+    fn parse_or(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.parse_and()?;
+        while let Some(t) = self.advance_on_match(&[TokenType::Or]) {
+            let line = t.line.clone();
+            let right = self.parse_and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator: LogicalOperator {
+                    tp: LogicalOperatorType::Or,
+                    line,
+                },
+                right: Box::new(right),
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_and(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.parse_equality()?;
+        while let Some(t) = self.advance_on_match(&[TokenType::And]) {
+            let line = t.line.clone();
+            let right = self.parse_equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator: LogicalOperator {
+                    tp: LogicalOperatorType::And,
+                    line,
+                },
+                right: Box::new(right),
+            };
+        }
         Ok(expr)
     }
 
@@ -756,5 +790,32 @@ mod tests {
             }
             _ => panic!("the only top-level statement in the code should be an if statement"),
         }
+    }
+
+    #[test]
+    fn test_logical_simple() {
+        let input = "3 == 4 and 4 > 6";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(and (== 3 4) (> 4 6))");
+
+        let input = "3 == 4 or 4 > 6";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(or (== 3 4) (> 4 6))");
+    }
+
+    #[test]
+    fn test_logical_associativity() {
+        let input = "3 == 4 and 4 > 6 or 5 < 6 and true or false";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(
+            expr_str,
+            "(or (or (and (== 3 4) (> 4 6)) (and (< 5 6) true)) false)"
+        )
     }
 }

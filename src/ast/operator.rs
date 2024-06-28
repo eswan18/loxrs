@@ -70,3 +70,30 @@ impl Display for UnaryOperatorType {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogicalOperator {
+    pub tp: LogicalOperatorType,
+    pub line: u32,
+}
+
+impl Display for LogicalOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.tp)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LogicalOperatorType {
+    And,
+    Or,
+}
+
+impl Display for LogicalOperatorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LogicalOperatorType::And => write!(f, "and"),
+            LogicalOperatorType::Or => write!(f, "or"),
+        }
+    }
+}

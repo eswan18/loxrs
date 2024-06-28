@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::ast::operator::{BinaryOperator, UnaryOperator};
+use crate::ast::operator::{BinaryOperator, LogicalOperator, UnaryOperator};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
@@ -22,6 +22,11 @@ pub enum Expr {
     },
     Literal {
         value: LiteralValue,
+    },
+    Logical {
+        left: Box<Expr>,
+        operator: LogicalOperator,
+        right: Box<Expr>,
     },
     Unary {
         operator: UnaryOperator,
@@ -55,6 +60,13 @@ impl Display for Expr {
                 LiteralValue::Boolean(b) => write!(f, "{}", b),
                 LiteralValue::Nil => write!(f, "nil"),
             },
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => {
+                write!(f, "({} {} {})", operator, left, right)
+            }
             Expr::Unary { operator, right } => {
                 write!(f, "({} {})", operator, right)
             }
