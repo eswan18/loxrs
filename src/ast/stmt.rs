@@ -1,19 +1,23 @@
 use core::fmt;
 use std::fmt::Display;
 
-use crate::ast::expr;
+use crate::ast::expr::Expr;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
-    Print(expr::Expr),
-    Expression(expr::Expr),
+    Print(Expr),
+    Expression(Expr),
     Var {
         name: String,
-        initializer: Option<expr::Expr>,
+        initializer: Option<Expr>,
+    },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
     },
     Block(Vec<Stmt>),
     If {
-        condition: expr::Expr,
+        condition: Expr,
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
@@ -28,6 +32,7 @@ impl Display for Stmt {
                 Some(expr) => write!(f, "var {} = {};", name, expr),
                 None => write!(f, "var {};", name),
             },
+            Stmt::While { condition, body } => write!(f, "while ({}) {}", condition, body),
             Stmt::Block(stmts) => {
                 write!(f, "{{\n")?;
                 for stmt in stmts {

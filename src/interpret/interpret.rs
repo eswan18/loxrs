@@ -45,6 +45,11 @@ impl<W: Write> Interpreter<W> {
                 };
                 self.environment.borrow_mut().define(&name, value);
             }
+            Stmt::While { condition, body } => {
+                while self.eval_expr(condition.clone())?.is_truthy() {
+                    self.eval_stmt(*body.clone())?;
+                }
+            }
             Stmt::Block(stmts) => {
                 // Keep a reference to the old environment around so we can restore it later.
                 let old_env = self.environment.clone();
@@ -612,5 +617,11 @@ mod tests {
 
         let output = exec_ast("print 1 or nil; print nil or 2;").unwrap();
         assert_eq!(output, "1\n2\n");
+    }
+
+    #[test]
+    fn test_while() {
+        let output = exec_ast("var x = 0; while (x < 3) { print x; x = x + 1; }").unwrap();
+        assert_eq!(output, "0\n1\n2\n");
     }
 }

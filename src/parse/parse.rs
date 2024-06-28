@@ -74,6 +74,24 @@ impl Parser {
         }
     }
 
+    /// Parse a while statement.
+    fn parse_while_statement(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the while token.
+        let while_token = self.advance();
+        let line = while_token.line;
+        // Consume the left paren.
+        if let None = self.advance_on_match(&[TokenType::LeftParen]) {
+            return Err(ParseError::ExpectedLeftParen { line });
+        };
+        let condition = self.parse_expression()?;
+        // Consume the right paren.
+        if let None = self.advance_on_match(&[TokenType::RightParen]) {
+            return Err(ParseError::ExpectedRightParen { line });
+        };
+        let body = Box::new(self.parse_statement()?);
+        Ok(Stmt::While { condition, body })
+    }
+
     /// Parse any non-declaration statement.
     fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
         if self.check_current_token_type(&[TokenType::If]) {
@@ -81,6 +99,8 @@ impl Parser {
         } else if self.check_current_token_type(&[TokenType::Print]) {
             self.advance(); // Consume the Print token.
             self.parse_print_statement()
+        } else if self.check_current_token_type(&[TokenType::While]) {
+            self.parse_while_statement()
         } else if self.check_current_token_type(&[TokenType::LeftBrace]) {
             self.parse_block()
         } else {
@@ -817,5 +837,27 @@ mod tests {
             expr_str,
             "(or (or (and (== 3 4) (> 4 6)) (and (< 5 6) true)) false)"
         )
+    }
+
+    #[test]
+    fn test_while() {
+        let input = "while (x < 5) { print x; x = x + 1; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::While { condition, body } => {
+                assert_eq!(format!("{}", condition), "(< x 5)");
+                match body.as_ref() {
+                    Stmt::Block(stmts) => {
+                        assert_eq!(stmts.len(), 2);
+                        assert!(matches!(stmts[0], Stmt::Print(_)));
+                        assert!(matches!(stmts[1], Stmt::Expression(_)));
+                    }
+                    _ => panic!("the body should be a block"),
+                }
+            }
+            _ => panic!("the only top-level statement in the code should be a while statement"),
+        }
     }
 }
