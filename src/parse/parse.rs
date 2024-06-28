@@ -742,4 +742,19 @@ mod tests {
             _ => panic!("the only top-level statement in the code should be a block"),
         }
     }
+
+    #[test]
+    // Make sure elses are bound to the nearest `if` that precedes them when it's ambiguous.
+    fn dangling_else_associativity() {
+        let input = "if (x == 4) if (y == 5) print 3; else print 4;";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::If { else_branch, .. } => {
+                assert!(matches!(else_branch, None), "The outer else should be None");
+            }
+            _ => panic!("the only top-level statement in the code should be an if statement"),
+        }
+    }
 }

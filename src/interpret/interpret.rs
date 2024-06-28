@@ -62,7 +62,17 @@ impl<W: Write> Interpreter<W> {
                 condition,
                 then_branch,
                 else_branch,
-            } => todo!(),
+            } => {
+                let should_exec = self.eval_expr(condition)?.is_truthy();
+                match should_exec {
+                    true => self.eval_stmt(*then_branch)?,
+                    false => {
+                        if let Some(else_branch) = else_branch {
+                            self.eval_stmt(*else_branch)?;
+                        };
+                    },
+                }
+            }
         }
         Ok(())
     }
@@ -526,5 +536,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(output, "3\n9\n7\n9\n");
+    }
+
+    #[test]
+    fn if_stmt() {
+        let output = exec_ast("if (true) { print 1; } else { print 2; }").unwrap();
+        assert_eq!(output, "1\n");
+    }
+
+    #[test]
+    fn if_else_stmt() {
+        let output = exec_ast("if ( 3 > 4 ) { print 1; } else { print 2; }").unwrap();
+        assert_eq!(output, "2\n");
     }
 }
