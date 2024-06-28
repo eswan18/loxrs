@@ -165,31 +165,22 @@ impl<W: Write> Interpreter<W> {
                     .assign(&name, evaluated.clone())?;
                 evaluated
             }
-            Expr::Logical { left, right, operator } => {
-                let left_value = self.eval_expr(*left)?.is_truthy();
-                let logical_result = match operator.tp {
-                    LogicalOperatorType::And => {
-                        match left_value {
-                            // Short circuit if already false.
-                            false => false,
-                            true => {
-                                let right_value = self.eval_expr(*right)?.is_truthy();
-                                left_value && right_value
-                            }
-                        }
-                    }
-                    LogicalOperatorType::Or => {
-                        match left_value {
-                            // Short circuit if already true.
-                            true => true,
-                            false => {
-                                let right_value = self.eval_expr(*right)?.is_truthy();
-                                left_value || right_value
-                            }
-                        }
-                    }
-                };
-                V::Boolean(logical_result)
+            Expr::Logical {
+                left,
+                right,
+                operator,
+            } => {
+                let left_value = self.eval_expr(*left)?;
+                match operator.tp {
+                    LogicalOperatorType::And => match left_value.is_truthy() {
+                        false => left_value,
+                        true => self.eval_expr(*right)?,
+                    },
+                    LogicalOperatorType::Or => match left_value.is_truthy() {
+                        true => left_value,
+                        false => self.eval_expr(*right)?,
+                    },
+                }
             }
         };
         Ok(evaluated)
@@ -582,10 +573,15 @@ mod tests {
         let ouput = exec_ast("print true and true; print true and false; print false and false; print false and true;").unwrap();
         assert_eq!(ouput, "true\nfalse\nfalse\nfalse\n");
         // Or
-        let ouput = exec_ast("print true or true; print true or false; print false or false; print false or true;").unwrap();
+        let ouput = exec_ast(
+            "print true or true; print true or false; print false or false; print false or true;",
+        )
+        .unwrap();
         assert_eq!(ouput, "true\ntrue\nfalse\ntrue\n");
         // Associativity
-        let ouput = exec_ast("print true and true or false and false; print true or false and false;").unwrap();
+        let ouput =
+            exec_ast("print true and true or false and false; print true or false and false;")
+                .unwrap();
         assert_eq!(ouput, "true\ntrue\n");
     }
 
@@ -607,5 +603,14 @@ mod tests {
         // Or w/out short-circuit.
         let ouput = exec_ast("var x = 4; print false or (x = false); print x;").unwrap();
         assert_eq!(ouput, "false\nfalse\n");
+    }
+
+    #[test]
+    fn logical_returns_actual_value_by_truthiness() {
+        let ouput = exec_ast("print 1 and nil; print nil and 2;").unwrap();
+        assert_eq!(ouput, "nil\nnil\n");
+
+        let output = exec_ast("print 1 or nil; print nil or 2;").unwrap();
+        assert_eq!(output, "1\n2\n");
     }
 }
