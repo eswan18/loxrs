@@ -58,6 +58,11 @@ impl<W: Write> Interpreter<W> {
                 // Reset the environment to the original one.
                 self.environment = old_env;
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => todo!(),
         }
         Ok(())
     }

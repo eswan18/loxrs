@@ -12,6 +12,11 @@ pub enum Stmt {
         initializer: Option<expr::Expr>,
     },
     Block(Vec<Stmt>),
+    If {
+        condition: expr::Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
 }
 
 impl Display for Stmt {
@@ -29,6 +34,17 @@ impl Display for Stmt {
                     write!(f, "{}\n", stmt)?;
                 }
                 write!(f, "}}")
+            }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                write!(f, "if ({}) {}", condition, then_branch)?;
+                match else_branch {
+                    Some(else_branch) => write!(f, " else {}", else_branch),
+                    None => write!(f, ""),
+                }
             }
         }
     }

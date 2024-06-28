@@ -76,7 +76,9 @@ impl Parser {
 
     /// Parse any non-declaration statement.
     fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.check_current_token_type(&[TokenType::Print]) {
+        if self.check_current_token_type(&[TokenType::If]) {
+            self.parse_if_statement()
+        } else if self.check_current_token_type(&[TokenType::Print]) {
             self.advance(); // Consume the Print token.
             self.parse_print_statement()
         } else if self.check_current_token_type(&[TokenType::LeftBrace]) {
@@ -84,6 +86,38 @@ impl Parser {
         } else {
             self.parse_expression_statement()
         }
+    }
+
+    fn parse_if_statement(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the 'if' token.
+        let if_token = self.advance().clone();
+        // Start by parsing the parens and enclosed condition expression.
+        if let None = self.advance_on_match(&[TokenType::LeftParen]) {
+            return Err(ParseError::ExpectedLeftParen {
+                line: if_token.line,
+            });
+        }
+        let condition = self.parse_expression()?;
+        if let None = self.advance_on_match(&[TokenType::RightParen]) {
+            return Err(ParseError::ExpectedRightParen {
+                line: if_token.line,
+            });
+        }
+        // Parse the then-branch (probably a block).
+        let then_branch = Box::new(self.parse_statement()?);
+        // Parse the else and its statement, if found.
+        let else_branch = match self.advance_on_match(&[TokenType::Else]) {
+            Some(_else_token) => {
+                let else_branch = self.parse_statement()?;
+                Some(Box::new(else_branch))
+            }
+            None => None,
+        };
+        Ok(Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
     /// Parse a print statement.
@@ -646,5 +680,66 @@ mod tests {
         assert_eq!(inner_stmts.len(), 2);
         assert!(matches!(inner_stmts[0], Stmt::Var { .. }));
         assert!(matches!(inner_stmts[1], Stmt::Expression(_)));
+    }
+
+    #[test]
+    fn if_stmt() {
+        let input = "if (x == 4) { var y = 5; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                assert_eq!(format!("{}", condition), "(== x 4)");
+                assert!(else_branch.is_none());
+                match then_branch.as_ref() {
+                    Stmt::Block(stmts) => {
+                        assert_eq!(stmts.len(), 1);
+                        assert!(matches!(stmts[0], Stmt::Var { .. }));
+                    }
+                    _ => panic!("the then branch should be a block"),
+                }
+            }
+            _ => panic!("the only top-level statement in the code should be a block"),
+        }
+    }
+
+    #[test]
+    fn if_else_stmt() {
+        let input = "if (x == 4) { var y = 5; } else { print 3; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                assert_eq!(format!("{}", condition), "(== x 4)");
+                match then_branch.as_ref() {
+                    Stmt::Block(stmts) => {
+                        assert_eq!(stmts.len(), 1);
+                        assert!(matches!(stmts[0], Stmt::Var { .. }));
+                    }
+                    _ => panic!("the then branch should be a block"),
+                }
+                match else_branch.as_ref() {
+                    Some(branch_box) => match branch_box.as_ref() {
+                        Stmt::Block(stmts) => {
+                            assert_eq!(stmts.len(), 1);
+                            assert!(matches!(stmts[0], Stmt::Print(_)));
+                        }
+                        _ => panic!("the else branch should be a block"),
+                    },
+                    _ => panic!("the else branch should be a block"),
+                }
+            }
+            _ => panic!("the only top-level statement in the code should be a block"),
+        }
     }
 }

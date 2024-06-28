@@ -8,6 +8,8 @@ pub enum ParseError {
     ExpectedSemicolon { line: u32 },
     ExpectedIdentifier { line: u32 },
     ExpectedRightBrace { line: u32 },
+    ExpectedLeftParen { line: u32 },
+    ExpectedRightParen { line: u32 },
     InvalidAssignmentTarget { expr: Expr, line: u32 },
 }
 
@@ -28,6 +30,12 @@ impl fmt::Display for ParseError {
             }
             ParseError::ExpectedRightBrace { line } => {
                 write!(f, "ParseError [line {}]: Expected '}}'", line)
+            }
+            ParseError::ExpectedLeftParen { line } => {
+                write!(f, "ParseError [lint {}]: Expected '('", line)
+            }
+            ParseError::ExpectedRightParen { line } => {
+                write!(f, "ParseError [lint {}]: Expected ')'", line)
             }
             ParseError::InvalidAssignmentTarget { line, expr } => {
                 write!(
