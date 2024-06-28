@@ -503,4 +503,22 @@ mod tests {
         let output = exec_ast("var x = 4; x = (x = 9) * 11; print x;").unwrap();
         assert_eq!(output, "99\n");
     }
+
+    #[test]
+    fn blocks() {
+        // Outer X is 3
+        // Enter block
+        // Print outer X (3)
+        // Reassign outer X to 9
+        // Print outer X again (9)
+        // Declare a new, inner X set to 5
+        // Reassign inner X to 7
+        // Print inner X (7)
+        // Print outer X (9)
+        let output = exec_ast(
+            "var x = 3;\n{ print x; x = 9; print x; var x = 5; x = 7; print x; }\nprint x;",
+        )
+        .unwrap();
+        assert_eq!(output, "3\n9\n7\n9\n");
+    }
 }
