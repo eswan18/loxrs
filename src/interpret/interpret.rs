@@ -1,4 +1,4 @@
-use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
+use crate::ast::{Ast, BinaryOperatorType, Expr, LogicalOperatorType, Stmt, UnaryOperatorType};
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
@@ -165,7 +165,32 @@ impl<W: Write> Interpreter<W> {
                     .assign(&name, evaluated.clone())?;
                 evaluated
             }
-            Expr::Logical { .. } => todo!(),
+            Expr::Logical { left, right, operator } => {
+                let left_value = self.eval_expr(*left)?.is_truthy();
+                let logical_result = match operator.tp {
+                    LogicalOperatorType::And => {
+                        match left_value {
+                            // Short circuit if already false.
+                            false => false,
+                            true => {
+                                let right_value = self.eval_expr(*right)?.is_truthy();
+                                left_value && right_value
+                            }
+                        }
+                    }
+                    LogicalOperatorType::Or => {
+                        match left_value {
+                            // Short circuit if already true.
+                            true => true,
+                            false => {
+                                let right_value = self.eval_expr(*right)?.is_truthy();
+                                left_value || right_value
+                            }
+                        }
+                    }
+                };
+                V::Boolean(logical_result)
+            }
         };
         Ok(evaluated)
     }
@@ -549,5 +574,38 @@ mod tests {
     fn if_else_stmt() {
         let output = exec_ast("if ( 3 > 4 ) { print 1; } else { print 2; }").unwrap();
         assert_eq!(output, "2\n");
+    }
+
+    #[test]
+    fn test_logical() {
+        // And
+        let ouput = exec_ast("print true and true; print true and false; print false and false; print false and true;").unwrap();
+        assert_eq!(ouput, "true\nfalse\nfalse\nfalse\n");
+        // Or
+        let ouput = exec_ast("print true or true; print true or false; print false or false; print false or true;").unwrap();
+        assert_eq!(ouput, "true\ntrue\nfalse\ntrue\n");
+        // Associativity
+        let ouput = exec_ast("print true and true or false and false; print true or false and false;").unwrap();
+        assert_eq!(ouput, "true\ntrue\n");
+    }
+
+    #[test]
+    fn test_logical_short_circuit_and() {
+        // And w/ short-circuit.
+        let ouput = exec_ast("var x = 4; print false and (x = true); print x;").unwrap();
+        assert_eq!(ouput, "false\n4\n");
+        // And w/out short-circuit.
+        let ouput = exec_ast("var x = 4; print true and (x = true); print x;").unwrap();
+        assert_eq!(ouput, "true\ntrue\n");
+    }
+
+    #[test]
+    fn test_logical_short_circuit_or() {
+        // Or w/ short-circuit.
+        let ouput = exec_ast("var x = 4; print true or (x = false); print x;").unwrap();
+        assert_eq!(ouput, "true\n4\n");
+        // Or w/out short-circuit.
+        let ouput = exec_ast("var x = 4; print false or (x = false); print x;").unwrap();
+        assert_eq!(ouput, "false\nfalse\n");
     }
 }
