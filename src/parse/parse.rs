@@ -124,7 +124,7 @@ impl Parser {
                     name,
                     value: Box::new(value),
                 }),
-                _ => Err(ParseError::InvalidAssignmentTarget { line }),
+                _ => Err(ParseError::InvalidAssignmentTarget { line, expr }),
             };
         }
 
@@ -403,6 +403,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::scan::scan;
 
@@ -480,6 +481,15 @@ mod tests {
     }
 
     #[test]
+    fn assignment() {
+        let input = "x = 3 * 4";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "(x = (* 3 4))");
+    }
+
+    #[test]
     fn error_missing_right_paren() {
         let input = "(4 + 5";
         let tokens = scan(input.to_string()).unwrap();
@@ -498,6 +508,56 @@ mod tests {
         let tokens = scan(input.to_string()).unwrap();
         let error = Parser::new(tokens).parse_expression().unwrap_err();
         assert_eq!(error, ParseError::ExtraInput { line: 1 });
+    }
+
+    #[test]
+    fn error_invalid_assignment_target() {
+        let inputs = [
+            (
+                "3 = 3",
+                Expr::Literal {
+                    value: LiteralValue::Number(3.0),
+                },
+            ),
+            (
+                "3 * x = 3",
+                Expr::Binary {
+                    left: Box::new(Expr::Literal {
+                        value: LiteralValue::Number(3.0),
+                    }),
+                    operator: BinaryOperator {
+                        tp: BinaryOperatorType::Star,
+                        line: 1,
+                    },
+                    right: Box::new(Expr::Variable {
+                        name: "x".to_string(),
+                    }),
+                },
+            ),
+            (
+                "true = 3",
+                Expr::Literal {
+                    value: LiteralValue::Boolean(true),
+                },
+            ),
+            (
+                "\"abc\" = 3",
+                Expr::Literal {
+                    value: LiteralValue::String("abc".to_string()),
+                },
+            ),
+        ];
+        for (input, target) in inputs {
+            let tokens = scan(input.to_string()).unwrap();
+            let error = Parser::new(tokens).parse_expression().unwrap_err();
+            assert_eq!(
+                error,
+                ParseError::InvalidAssignmentTarget {
+                    expr: target,
+                    line: 1
+                }
+            )
+        }
     }
 
     ////////////////

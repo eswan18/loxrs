@@ -1,12 +1,13 @@
+use crate::ast::Expr;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
     MissingRightParen { line: u32 },
     ExtraInput { line: u32 },
     ExpectedSemicolon { line: u32 },
     ExpectedIdentifier { line: u32 },
-    InvalidAssignmentTarget { line: u32 },
+    InvalidAssignmentTarget { expr: Expr, line: u32 },
 }
 
 impl fmt::Display for ParseError {
@@ -24,8 +25,12 @@ impl fmt::Display for ParseError {
             ParseError::ExpectedIdentifier { line } => {
                 write!(f, "ParseError [line {}]: Expected identifier", line)
             }
-            ParseError::InvalidAssignmentTarget { line } => {
-                write!(f, "ParseError [line {}]: Invalid assignment target", line)
+            ParseError::InvalidAssignmentTarget { line, expr } => {
+                write!(
+                    f,
+                    "ParseError [line {}]: Invalid assignment target ({})",
+                    line, expr
+                )
             }
         }
     }
