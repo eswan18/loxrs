@@ -128,7 +128,11 @@ impl<W: Write> Interpreter<W> {
                 Some(v) => v.clone(),
                 None => return Err(RuntimeError::UndefinedVariable(name)),
             },
-            Expr::Assignment { name, value } => todo!(),
+            Expr::Assignment { name, value } => {
+                let evaluated = self.eval_expr(*value)?;
+                self.environment.assign(&name, evaluated.clone())?;
+                evaluated
+            }
         };
         Ok(evaluated)
     }
@@ -474,5 +478,13 @@ mod tests {
     fn simple_variables() {
         let output = exec_ast("var x = 123; var y = 4; print 5; print x + y;").unwrap();
         assert_eq!(output, "5\n127\n");
+    }
+
+    #[test]
+    fn variables_with_reassignment() {
+        let output = exec_ast("var x = 4; x = 12 * 12; print x;").unwrap();
+        assert_eq!(output, "144\n");
+        let output = exec_ast("var x = 4; x = (x = 9) * 11; print x;").unwrap();
+        assert_eq!(output, "99\n");
     }
 }
