@@ -624,4 +624,12 @@ mod tests {
         let output = exec_ast("var x = 0; while (x < 3) { print x; x = x + 1; }").unwrap();
         assert_eq!(output, "0\n1\n2\n");
     }
+
+    #[test]
+    fn test_for() {
+        let output = exec_ast("for (var x = 0; x < 3; x = x + 1) { print x; }").unwrap();
+        assert_eq!(output, "0\n1\n2\n");
+        let output = exec_ast("var y = 1; for (; y != 9;) { print y; y = y * 3; }").unwrap();
+        assert_eq!(output, "1\n3\n");
+    }
 }

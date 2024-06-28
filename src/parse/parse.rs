@@ -42,18 +42,21 @@ impl Parser {
     // Parsing statements
 
     fn parse_declaration(&mut self) -> Result<Stmt, ParseError> {
-        match self.advance_on_match(&[TokenType::Var]) {
-            Some(_) => self.parse_var_declaration(),
-            None => self.parse_statement(),
+        if self.check_current_token_type(&[TokenType::Var]) {
+            self.parse_var_declaration()
+        } else {
+            self.parse_statement()
         }
     }
 
     /// Parse a variable declaration.
     fn parse_var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the 'var' token.
+        let var_token = self.advance();
+        let line = var_token.line;
         let name = match self.advance_on_match(&[TokenType::Identifier]) {
             Some(token) => token.lexeme.clone(),
             None => {
-                let line = self.peek().unwrap().line;
                 return Err(ParseError::ExpectedIdentifier { line });
             }
         };
@@ -68,7 +71,6 @@ impl Parser {
         match self.advance_on_match(&[TokenType::Semicolon]) {
             Some(_) => Ok(stmt),
             None => {
-                let line = self.peek().unwrap().line;
                 return Err(ParseError::ExpectedSemicolon { line });
             }
         }
@@ -94,10 +96,11 @@ impl Parser {
 
     /// Parse any non-declaration statement.
     fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.check_current_token_type(&[TokenType::If]) {
+        if self.check_current_token_type(&[TokenType::For]) {
+            self.parse_for_statement()
+        } else if self.check_current_token_type(&[TokenType::If]) {
             self.parse_if_statement()
         } else if self.check_current_token_type(&[TokenType::Print]) {
-            self.advance(); // Consume the Print token.
             self.parse_print_statement()
         } else if self.check_current_token_type(&[TokenType::While]) {
             self.parse_while_statement()
@@ -106,6 +109,67 @@ impl Parser {
         } else {
             self.parse_expression_statement()
         }
+    }
+
+    /// Parse a for statement.
+    fn parse_for_statement(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the `for` token.
+        let for_token = self.advance();
+        let line = for_token.line;
+        // Consume the left paren.
+        if let None = self.advance_on_match(&[TokenType::LeftParen]) {
+            return Err(ParseError::ExpectedLeftParen { line });
+        }
+        // Check for an initializer expression: it can be a var statement, an expression statement, or empty (just a semicolon).
+        let mut initializer: Option<Box<Stmt>> = None;
+        if self.advance_on_match(&[TokenType::Semicolon]).is_none() {
+            let init_stmt = if self.check_current_token_type(&[TokenType::Var]) {
+                self.parse_var_declaration()?
+            } else {
+                self.parse_expression_statement()?
+            };
+            initializer = Some(Box::new(init_stmt));
+        }
+        // Check for a condition: an expression or empty.
+        let mut condition: Option<Expr> = None;
+        if !self.check_current_token_type(&[TokenType::Semicolon]) {
+            condition = Some(self.parse_expression()?)
+        }
+        // Consume the semicolon after the condition.
+        if self.advance_on_match(&[TokenType::Semicolon]).is_none() {
+            return Err(ParseError::ExpectedSemicolon { line });
+        }
+        // Check for an increment expression: also optional.
+        let mut increment: Option<Expr> = None;
+        if !self.check_current_token_type(&[TokenType::RightParen]) {
+            increment = Some(self.parse_expression()?);
+        }
+        // Consume the right paren after the conditoin
+        if self.advance_on_match(&[TokenType::RightParen]).is_none() {
+            return Err(ParseError::MissingRightParen { line });
+        }
+        // Parse the body.
+        let mut body = self.parse_statement()?;
+
+        if let Some(inc_expr) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expression(inc_expr)]);
+        };
+        let condition = match condition {
+            Some(cond) => cond,
+            None => Expr::Literal {
+                value: LiteralValue::Boolean(true),
+            },
+        };
+        let for_stmt = Stmt::While {
+            condition,
+            body: Box::new(body),
+        };
+        let for_stmt = match initializer {
+            Some(init_stmt) => Stmt::Block(vec![*init_stmt, for_stmt]),
+            None => for_stmt,
+        };
+
+        Ok(for_stmt)
     }
 
     fn parse_if_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -142,8 +206,10 @@ impl Parser {
 
     /// Parse a print statement.
     fn parse_print_statement(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the print token.
+        let print_token = self.advance();
+        let line = print_token.line;
         let expr = self.parse_expression()?;
-        let line = self.peek().unwrap().line;
         match self.advance_on_match(&[TokenType::Semicolon]) {
             Some(_) => Ok(Stmt::Print(expr)),
             None => Err(ParseError::ExpectedSemicolon { line }),
@@ -853,6 +919,44 @@ mod tests {
                         assert_eq!(stmts.len(), 2);
                         assert!(matches!(stmts[0], Stmt::Print(_)));
                         assert!(matches!(stmts[1], Stmt::Expression(_)));
+                    }
+                    _ => panic!("the body should be a block"),
+                }
+            }
+            _ => panic!("the only top-level statement in the code should be a while statement"),
+        }
+    }
+
+    #[test]
+    fn test_for_with_all_parts() {
+        let input = "for (var i = 0; i < 5; i = i + 1) { print i; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        // For loop top-level statements are blocks if there's an initializer, otherwise they're just while loops.
+        let inner_block = match &stmts[0] {
+            Stmt::Block(stmts) => stmts,
+            _ => panic!("the only top-level statement in the code should be a block"),
+        };
+        // The block should have two statements: the var declaration and the while loop.
+        assert_eq!(inner_block.len(), 2);
+        assert!(matches!(inner_block[0], Stmt::Var { .. }));
+        assert!(matches!(inner_block[1], Stmt::While { .. }));
+    }
+
+    #[test]
+    fn test_minimal_for() {
+        let input = "for (;;) { print 3; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::While { condition, body } => {
+                assert_eq!(format!("{}", condition), "true");
+                match body.as_ref() {
+                    Stmt::Block(stmts) => {
+                        assert_eq!(stmts.len(), 1);
+                        assert!(matches!(stmts[0], Stmt::Print(_)));
                     }
                     _ => panic!("the body should be a block"),
                 }
