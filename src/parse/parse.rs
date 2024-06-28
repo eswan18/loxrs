@@ -108,7 +108,27 @@ impl Parser {
 
     /// Parse any expression.
     fn parse_expression(&mut self) -> Result<Expr, ParseError> {
-        self.parse_equality()
+        self.parse_assignment()
+    }
+
+    fn parse_assignment(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.parse_equality()?;
+
+        // If we hit an equals sign, assignment must be intended.
+        if let Some(t) = self.advance_on_match(&[TokenType::Equal]) {
+            let line = t.line;
+            let value = self.parse_assignment()?;
+            return match expr {
+                // The assignment is only valid if the left hand side is a variable.
+                Expr::Variable { name } => Ok(Expr::Assignment {
+                    name,
+                    value: Box::new(value),
+                }),
+                _ => Err(ParseError::InvalidAssignmentTarget { line }),
+            };
+        }
+
+        Ok(expr)
     }
 
     /// Parse equality checking expressions.

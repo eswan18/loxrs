@@ -1,18 +1,10 @@
 use crate::ast::{Ast, BinaryOperatorType, Expr, Stmt, UnaryOperatorType};
-use crate::interpret::RuntimeError;
 use crate::interpret::environment::Environment;
+use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 use std::io::Write;
 
-/// Interpret the given AST.
-//
-/// This is a thin wrapper over the non-public eval function.
-pub fn interpret<W: Write>(ast: Ast, writer: W) -> Result<(), RuntimeError> {
-    let mut interpreter = Interpreter::new(writer);
-    interpreter.interpret(ast)
-}
-
-struct Interpreter<W: Write> {
+pub struct Interpreter<W: Write> {
     // Where to direct the output of "print"
     writer: W,
     // The environment stores variables values.
@@ -21,7 +13,10 @@ struct Interpreter<W: Write> {
 
 impl<W: Write> Interpreter<W> {
     pub fn new(writer: W) -> Self {
-        Self { writer, environment: Environment::new() }
+        Self {
+            writer,
+            environment: Environment::new(),
+        }
     }
 
     pub fn interpret(&mut self, ast: Ast) -> Result<(), RuntimeError> {
@@ -40,14 +35,14 @@ impl<W: Write> Interpreter<W> {
                 let value = self.eval_expr(expr)?;
                 writeln!(self.writer, "{}", value)
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
-            },
+            }
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
                     Some(expr) => self.eval_expr(expr)?,
                     None => V::Nil,
                 };
                 self.environment.define(&name, value);
-            },
+            }
         }
         Ok(())
     }
@@ -128,13 +123,12 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::BangEqual => V::Boolean(left != right),
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
-            },
-            Expr::Variable { name } => {
-                match self.environment.get(&name) {
-                    Some(v) => v.clone(),
-                    None => return Err(RuntimeError::UndefinedVariable(name)),
-                }
             }
+            Expr::Variable { name } => match self.environment.get(&name) {
+                Some(v) => v.clone(),
+                None => return Err(RuntimeError::UndefinedVariable(name)),
+            },
+            Expr::Assignment { name, value } => todo!(),
         };
         Ok(evaluated)
     }

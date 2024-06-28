@@ -21,7 +21,9 @@ pub fn run_file(filename: &str) -> Result<(), i32> {
             return Err(1);
         }
     };
-    match run::run_code(&contents) {
+    let stdout = io::stdout();
+    let mut interpreter = interpret::Interpreter::new(stdout);
+    match run::run_code(&contents, &mut interpreter) {
         Ok(_) => Ok(()),
         Err(e) => {
             eprintln!("{}", e);
@@ -32,6 +34,8 @@ pub fn run_file(filename: &str) -> Result<(), i32> {
 
 pub fn run_repl() -> Result<(), i32> {
     let mut buffer = String::new();
+    let stdout = io::stdout();
+    let mut interpreter = interpret::Interpreter::new(stdout);
 
     loop {
         // Repeatedly read input from the user and execute it.
@@ -43,7 +47,7 @@ pub fn run_repl() -> Result<(), i32> {
             // Allows us to exit on ctrl-D.
             break;
         }
-        if let Err(e) = run::run_code(&buffer) {
+        if let Err(e) = run::run_code(&buffer, &mut interpreter) {
             // If an error is encountered, print it to stderr.
             eprintln!("{}", e);
         }

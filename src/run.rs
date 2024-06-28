@@ -2,8 +2,12 @@ use crate::error::LoxError;
 use crate::interpret;
 use crate::parse;
 use crate::scan;
+use std::io::Write;
 
-pub fn run_code(code: &str) -> Result<(), LoxError> {
+pub fn run_code<W: Write>(
+    code: &str,
+    interpreter: &mut interpret::Interpreter<W>,
+) -> Result<(), LoxError> {
     let tokens = match scan::scan(code.to_string()) {
         Ok(tokens) => tokens,
         Err(scan_errors) => {
@@ -45,7 +49,7 @@ pub fn run_code(code: &str) -> Result<(), LoxError> {
             });
         }
     };
-    match interpret::interpret(ast, std::io::stdout()) {
+    match interpreter.interpret(ast) {
         Ok(_) => Ok(()),
         Err(runtime_error) => {
             return Err(LoxError {
