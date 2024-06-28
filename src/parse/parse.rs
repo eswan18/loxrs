@@ -62,7 +62,7 @@ impl Parser {
         };
         // Check if there is an initial value (which is optional).
         let mut initializer: Option<Expr> = None;
-        if let Some(_) = self.advance_on_match(&[TokenType::Equal]) {
+        if self.advance_on_match(&[TokenType::Equal]).is_some() {
             let expr = self.parse_expression()?;
             initializer = Some(expr);
         }
@@ -82,12 +82,12 @@ impl Parser {
         let while_token = self.advance();
         let line = while_token.line;
         // Consume the left paren.
-        if let None = self.advance_on_match(&[TokenType::LeftParen]) {
+        if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
             return Err(ParseError::ExpectedLeftParen { line });
         };
         let condition = self.parse_expression()?;
         // Consume the right paren.
-        if let None = self.advance_on_match(&[TokenType::RightParen]) {
+        if self.advance_on_match(&[TokenType::RightParen]).is_none() {
             return Err(ParseError::ExpectedRightParen { line });
         };
         let body = Box::new(self.parse_statement()?);
@@ -117,7 +117,7 @@ impl Parser {
         let for_token = self.advance();
         let line = for_token.line;
         // Consume the left paren.
-        if let None = self.advance_on_match(&[TokenType::LeftParen]) {
+        if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
             return Err(ParseError::ExpectedLeftParen { line });
         }
         // Check for an initializer expression: it can be a var statement, an expression statement, or empty (just a semicolon).
@@ -176,13 +176,13 @@ impl Parser {
         // Consume the 'if' token.
         let if_token = self.advance().clone();
         // Start by parsing the parens and enclosed condition expression.
-        if let None = self.advance_on_match(&[TokenType::LeftParen]) {
+        if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
             return Err(ParseError::ExpectedLeftParen {
                 line: if_token.line,
             });
         }
         let condition = self.parse_expression()?;
-        if let None = self.advance_on_match(&[TokenType::RightParen]) {
+        if self.advance_on_match(&[TokenType::RightParen]).is_none() {
             return Err(ParseError::ExpectedRightParen {
                 line: if_token.line,
             });
@@ -479,7 +479,7 @@ impl Parser {
         }
 
         // If we didn't match anything yet, look for a grouping expression.
-        if let Some(_) = self.advance_on_match(&[TokenType::LeftParen]) {
+        if self.advance_on_match(&[TokenType::LeftParen]).is_some() {
             let expr = self.parse_expression()?;
             match self.peek() {
                 Some(token) if token.tp == TokenType::RightParen => {
