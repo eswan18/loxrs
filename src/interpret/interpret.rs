@@ -2,6 +2,7 @@ use crate::ast::{Ast, BinaryOperatorType, Expr, LogicalOperatorType, Stmt, Unary
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
+use crate::value::{Callable, NativeFunction};
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
@@ -9,15 +10,37 @@ use std::rc::Rc;
 pub struct Interpreter<W: Write> {
     // Where to direct the output of "print"
     writer: W,
-    // The environment stores variables values.
+    // The global variable environment.
+    globals: Rc<RefCell<Environment>>,
+    // The current variable environment.
     environment: Rc<RefCell<Environment>>,
 }
 
 impl<W: Write> Interpreter<W> {
     pub fn new(writer: W) -> Self {
+        let mut root_env = Environment::new(None);
+
+        // Add our native functions (just this one) to the global environment.
+        fn clock(_env: Rc<RefCell<Environment>>, _args: Vec<V>) -> V {
+            // This fetches the seconds since the epoch.
+            V::Number(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64(),
+            )
+        }
+        let clock_callable = Callable::Native(NativeFunction::new(0, clock));
+        root_env.define("clock", V::Callable(clock_callable));
+
+        // Wrap the root environment in a RefCell and Rc before storing it, since we
+        // are going to have a lot of references to it and sometimes need to mutate.
+        let globals = Rc::new(RefCell::new(root_env));
+
         Self {
             writer,
-            environment: Rc::new(RefCell::new(Environment::new(None))),
+            globals: globals.clone(),
+            environment: globals.clone(),
         }
     }
 
@@ -159,7 +182,34 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 }
             }
-            Expr::Call { .. } => todo!(),
+            Expr::Call { callee, args, line } => {
+                let callee = self.eval_expr(*callee)?;
+                let arg_values = args
+                    .into_iter()
+                    .map(|arg| self.eval_expr(arg))
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .collect::<Result<Vec<V>, RuntimeError>>()?;
+                // Unwrap the callable or throw an error if it's not callable.
+                let callable = match callee {
+                    V::Callable(callable) => callable,
+                    v => {
+                        return Err(RuntimeError::CallableTypeError {
+                            uncallable_type: v.tp(),
+                            line,
+                        })
+                    }
+                };
+                // Call it and return the result.
+                if arg_values.len() != callable.arity() {
+                    return Err(RuntimeError::ArityError {
+                        expected: callable.arity(),
+                        received: arg_values.len(),
+                        line,
+                    });
+                }
+                callable.call(self.environment.clone(), arg_values)
+            }
             Expr::Variable { name } => match self.environment.borrow().get(&name) {
                 Some(v) => v,
                 None => return Err(RuntimeError::UndefinedVariable(name)),
@@ -632,5 +682,12 @@ mod tests {
         assert_eq!(output, "0\n1\n2\n");
         let output = exec_ast("var y = 1; for (; y != 9;) { print y; y = y * 3; }").unwrap();
         assert_eq!(output, "1\n3\n");
+    }
+
+    #[test]
+    fn native_function_call() {
+        let output = exec_ast("print clock();").unwrap();
+        let output_as_f64: f64 = output.trim().parse().unwrap();
+        assert!(output_as_f64 > 0.0);
     }
 }

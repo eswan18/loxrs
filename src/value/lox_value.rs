@@ -1,11 +1,14 @@
-use crate::ast::LiteralValue;
 use std::fmt;
+
+use crate::ast::LiteralValue;
+use crate::value::{Callable, LoxType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoxValue {
     Number(f64),
     String(String),
     Boolean(bool),
+    Callable(Callable),
     Nil,
 }
 
@@ -34,6 +37,7 @@ impl LoxValue {
             LoxValue::Number(_) => LoxType::Number,
             LoxValue::String(_) => LoxType::String,
             LoxValue::Boolean(_) => LoxType::Boolean,
+            LoxValue::Callable(_) => LoxType::Callable,
             LoxValue::Nil => LoxType::Nil,
         }
     }
@@ -45,26 +49,9 @@ impl fmt::Display for LoxValue {
             LoxValue::Number(n) => write!(f, "{}", n),
             LoxValue::String(s) => write!(f, "\"{}\"", s),
             LoxValue::Boolean(b) => write!(f, "{}", b),
+            LoxValue::Callable(Callable::Native(_)) => write!(f, "<native-function>"),
+            LoxValue::Callable(Callable::UserDefined(_)) => write!(f, "<function>"),
             LoxValue::Nil => write!(f, "nil"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LoxType {
-    Number,
-    String,
-    Boolean,
-    Nil,
-}
-
-impl fmt::Display for LoxType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            LoxType::Number => write!(f, "Number"),
-            LoxType::String => write!(f, "String"),
-            LoxType::Boolean => write!(f, "Boolean"),
-            LoxType::Nil => write!(f, "Nil"),
         }
     }
 }

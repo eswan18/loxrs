@@ -16,6 +16,15 @@ pub enum RuntimeError {
         right: LoxType,
         line: u32,
     },
+    CallableTypeError {
+        uncallable_type: LoxType,
+        line: u32,
+    },
+    ArityError {
+        expected: usize,
+        received: usize,
+        line: u32,
+    },
     IOError(std::io::Error),
     UndefinedVariable(String),
 }
@@ -49,6 +58,28 @@ impl PartialEq for RuntimeError {
                     line: line2,
                 },
             ) => op1 == op2 && left1 == left2 && right1 == right2 && line1 == line2,
+            (
+                RuntimeError::CallableTypeError {
+                    uncallable_type: tp1,
+                    line: l1,
+                },
+                RuntimeError::CallableTypeError {
+                    uncallable_type: tp2,
+                    line: l2,
+                },
+            ) => tp1 == tp2 && l1 == l2,
+            (
+                RuntimeError::ArityError {
+                    expected: e1,
+                    received: r1,
+                    line: l1,
+                },
+                RuntimeError::ArityError {
+                    expected: e2,
+                    received: r2,
+                    line: l2,
+                },
+            ) => e1 == e2 && r1 == r2 && l1 == l2,
             (RuntimeError::IOError(err1), RuntimeError::IOError(err2)) => {
                 err1.kind() == err2.kind()
             }
@@ -83,6 +114,21 @@ impl fmt::Display for RuntimeError {
                     operator, left, right
                 );
                 write!(f, "BinaryOpTypeError [line {}]: {}", line, err_msg)
+            }
+            RuntimeError::CallableTypeError {
+                uncallable_type,
+                line,
+            } => {
+                let err_msg = format!("Type {} is not callable", uncallable_type);
+                write!(f, "CallableTypeError [line {}]: {}", line, err_msg)
+            }
+            RuntimeError::ArityError {
+                expected,
+                received,
+                line,
+            } => {
+                let err_msg = format!("Expected {} arguments but received {}", expected, received);
+                write!(f, "ArityError [line {}]: {}", line, err_msg)
             }
             RuntimeError::IOError(err) => write!(f, "IOError: {}", err),
             RuntimeError::UndefinedVariable(name) => {

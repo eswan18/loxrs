@@ -458,7 +458,8 @@ impl Parser {
                 }
                 expr = Expr::Call {
                     callee: Box::new(expr),
-                    arguments: args,
+                    args,
+                    line,
                 };
             } else {
                 break;
@@ -1025,7 +1026,7 @@ mod tests {
     }
 
     #[test]
-    fn error_too_many_args() {
+    fn error_call_arg_count_limit() {
         let args = (0..=256).map(|_| "1").collect::<Vec<&str>>().join(", ");
         let func_call_input = format!("abc({});", args);
         let tokens = scan(func_call_input).unwrap();

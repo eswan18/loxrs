@@ -19,7 +19,8 @@ pub enum Expr {
     },
     Call {
         callee: Box<Expr>,
-        arguments: Vec<Expr>,
+        args: Vec<Expr>,
+        line: u32,
     },
     Grouping {
         expression: Box<Expr>,
@@ -55,8 +56,8 @@ impl Display for Expr {
             } => {
                 write!(f, "({} {} {})", operator, left, right)
             }
-            Expr::Call { callee, arguments } => {
-                let args = arguments
+            Expr::Call { callee, args, .. } => {
+                let args = args
                     .iter()
                     .map(|arg| format!("{}", arg))
                     .collect::<Vec<String>>()
