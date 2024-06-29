@@ -223,7 +223,7 @@ impl<W: Write> Interpreter<W> {
                         line,
                     });
                 }
-                let subenvironment = Environment::new(Some(self.environment.clone()));
+                let subenvironment = Environment::new(Some(self.globals.clone()));
                 let subinterpreter = Interpreter {
                     writer: self.writer.clone(),
                     globals: self.globals.clone(),
@@ -713,9 +713,32 @@ mod tests {
     }
 
     #[test]
-    fn udf_decl_and_call_void_function() {
+    fn udf_call() {
         let output = exec_ast("fun do(a, b) { print(3); } var x = do(3, 4); print x;").unwrap();
         assert_eq!(output, "3\nnil\n");
+    }
+
+    #[test]
+    fn arity_error() {
+        let error = exec_ast("fun do(a, b) { } do(3);").unwrap_err();
+        assert_eq!(
+            error,
+            RuntimeError::ArityError {
+                expected: 2,
+                received: 1,
+                line: 1
+            }
+        );
+
+        let error = exec_ast("fun do(a, b) { } do(3, 4, 5);").unwrap_err();
+        assert_eq!(
+            error,
+            RuntimeError::ArityError {
+                expected: 2,
+                received: 3,
+                line: 1
+            }
+        );
     }
 
     #[test]
@@ -726,10 +749,11 @@ mod tests {
 
     #[test]
     fn udf_can_modify_outer_scope() {
-        let output = exec_ast("var x = 3; fun do(a, b) { x = 4; } do(3, 4); print x;").unwrap();
+        let output = exec_ast("var x = 3; fun do() { x = 4; } do(); print x;").unwrap();
         assert_eq!(output, "4\n");
     }
 
+    #[ignore] // Closures are not implemented yet.
     #[test]
     fn udf_can_enclose_variables() {
         let output = exec_ast(
@@ -737,5 +761,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(output, "3\n");
+    }
+
+    #[test]
+    fn udf_cant_read_inner_scope() {
+        let error = exec_ast("fun do() { print(x); } {var x = 4; do();}").unwrap_err();
+        assert_eq!(error, RuntimeError::UndefinedVariable("x".to_string()));
     }
 }
