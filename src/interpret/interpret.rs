@@ -768,4 +768,12 @@ mod tests {
         let error = exec_ast("fun do() { print(x); } {var x = 4; do();}").unwrap_err();
         assert_eq!(error, RuntimeError::UndefinedVariable("x".to_string()));
     }
+
+    #[test]
+    fn udf_can_recurse() {
+        let output =
+            exec_ast("fun decrement(n) { print n; if (n > 1) { decrement(n-1); } } decrement(5);")
+                .unwrap();
+        assert_eq!(output, "5\n4\n3\n2\n1\n");
+    }
 }
