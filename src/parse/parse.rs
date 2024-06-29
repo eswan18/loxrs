@@ -317,13 +317,10 @@ impl Parser {
     /// Parse a block of statements.
     fn parse_block(&mut self) -> Result<Stmt, ParseError> {
         // Consume the left brace.
-        let line = match self.advance_on_match(&[TokenType::LeftBrace]) {
-            Some(t) => t.line,
-            None => {
-                return Err(ParseError::ExtraInput {
-                    line: self.peek().unwrap().line,
-                });
-            }
+        if self.advance_on_match(&[TokenType::LeftBrace]).is_none() {
+            return Err(ParseError::ExpectedLeftBrace {
+                line: self.peek().unwrap().line,
+            });
         };
         let mut stmts: Vec<Stmt> = Vec::new();
         while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {

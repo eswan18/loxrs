@@ -2,7 +2,7 @@ use crate::ast::{Ast, BinaryOperatorType, Expr, LogicalOperatorType, Stmt, Unary
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
-use crate::value::{Callable, NativeFunction};
+use crate::value::{Callable, NativeFunction, UserDefinedFunction};
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
@@ -21,14 +21,15 @@ impl<W: Write> Interpreter<W> {
         let mut root_env = Environment::new(None);
 
         // Add our native functions (just this one) to the global environment.
-        fn clock(_env: Rc<RefCell<Environment>>, _args: Vec<V>) -> V {
+        fn clock(_env: Rc<RefCell<Environment>>, _args: Vec<V>) -> Result<V, RuntimeError> {
             // This fetches the seconds since the epoch.
-            V::Number(
+            let now = V::Number(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_secs_f64(),
-            )
+            );
+            Ok(now)
         }
         let clock_callable = Callable::Native(NativeFunction::new(0, clock));
         root_env.define("clock", V::Callable(clock_callable));
@@ -61,7 +62,16 @@ impl<W: Write> Interpreter<W> {
             Stmt::Expression(expr) => {
                 self.eval_expr(expr)?;
             }
-            Stmt::Function { name, params, body } => todo!(),
+            Stmt::Function { name, params, body } => {
+                let inner_stmts = match *body {
+                    Stmt::Block(stmts) => stmts,
+                    _ => panic!("Function body must be a block"),
+                };
+                let function = Callable::UserDefined(UserDefinedFunction::new(params, inner_stmts));
+                self.environment
+                    .borrow_mut()
+                    .define(&name, V::Callable(function));
+            }
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
                     Some(expr) => self.eval_expr(expr)?,
@@ -209,7 +219,7 @@ impl<W: Write> Interpreter<W> {
                         line,
                     });
                 }
-                callable.call(self.environment.clone(), arg_values)
+                callable.call(self.environment.clone(), arg_values)?
             }
             Expr::Variable { name } => match self.environment.borrow().get(&name) {
                 Some(v) => v,
