@@ -11,11 +11,20 @@ use std::io::Write;
 pub struct UserDefinedFunction {
     param_names: Vec<String>,
     body: Vec<Stmt>,
+    closure: Rc<RefCell<Environment>>,
 }
 
 impl UserDefinedFunction {
-    pub fn new(param_names: Vec<String>, body: Vec<Stmt>) -> Self {
-        Self { param_names, body }
+    pub fn new(
+        param_names: Vec<String>,
+        body: Vec<Stmt>,
+        closure: Rc<RefCell<Environment>>,
+    ) -> Self {
+        Self {
+            param_names,
+            body,
+            closure,
+        }
     }
 }
 
@@ -59,8 +68,14 @@ impl Callable {
         W: Write,
     {
         match self {
-            Callable::UserDefined(UserDefinedFunction { param_names, body }) => {
-                // Arity checks happen in the interpreter so we don't worry about them here.
+            Callable::UserDefined(UserDefinedFunction {
+                param_names,
+                body,
+                closure,
+            }) => {
+                // Note that arity checks happen in the interpreter so we don't worry about them here.
+                // Replace the interpreter's environment with this function's closure.
+                subinterpreter.set_environment(closure.clone());
                 // Start by defining variables for each argument.
                 for (name, value) in param_names.iter().zip(args.iter()) {
                     subinterpreter

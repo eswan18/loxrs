@@ -56,6 +56,10 @@ impl<W: Write> Interpreter<W> {
         self.environment.clone()
     }
 
+    pub fn set_environment(&mut self, env: Rc<RefCell<Environment>>) {
+        self.environment = env;
+    }
+
     pub fn eval_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Print(expr) => {
@@ -71,7 +75,11 @@ impl<W: Write> Interpreter<W> {
                     Stmt::Block(stmts) => stmts,
                     _ => panic!("Function body must be a block"),
                 };
-                let function = Callable::UserDefined(UserDefinedFunction::new(params, inner_stmts));
+                let function = Callable::UserDefined(UserDefinedFunction::new(
+                    params,
+                    inner_stmts,
+                    self.environment.clone(),
+                ));
                 self.environment
                     .borrow_mut()
                     .define(&name, V::Callable(function));
@@ -223,11 +231,10 @@ impl<W: Write> Interpreter<W> {
                         line,
                     });
                 }
-                let subenvironment = Environment::new(Some(self.globals.clone()));
                 let subinterpreter = Interpreter {
                     writer: self.writer.clone(),
                     globals: self.globals.clone(),
-                    environment: Rc::new(RefCell::new(subenvironment)),
+                    environment: self.globals.clone(),
                 };
                 callable.call(subinterpreter, arg_values)?
             }
@@ -753,7 +760,6 @@ mod tests {
         assert_eq!(output, "4\n");
     }
 
-    #[ignore] // Closures are not implemented yet.
     #[test]
     fn udf_can_enclose_variables() {
         let output = exec_ast(

@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::interpret::RuntimeError;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Environment {
     pub enclosing: Option<Rc<RefCell<Environment>>>,
     values: HashMap<String, LoxValue>,
