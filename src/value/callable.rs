@@ -2,8 +2,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ast::Stmt;
-use crate::interpret::{Environment, RuntimeError};
+use crate::interpret::{Environment, Interpreter, RuntimeError};
 use crate::value::LoxValue;
+use std::io::Write;
 
 #[derive(Debug, PartialEq, Clone)]
 /// A user-defined function that can be called from Lox and is written in Lox.
@@ -49,20 +50,29 @@ impl Callable {
         }
     }
 
-    pub fn call(
+    pub fn call<W>(
         &self,
-        env: Rc<RefCell<Environment>>,
+        mut subinterpreter: Interpreter<W>,
         args: Vec<LoxValue>,
-    ) -> Result<LoxValue, RuntimeError> {
+    ) -> Result<LoxValue, RuntimeError>
+    where
+        W: Write,
+    {
         match self {
-            Callable::UserDefined(UserDefinedFunction { param_names, .. }) => {
+            Callable::UserDefined(UserDefinedFunction { param_names, body }) => {
                 // Arity checks happen in the interpreter so we don't worry about them here.
+                // Start by defining variables for each argument.
                 for (name, value) in param_names.iter().zip(args.iter()) {
-                    env.borrow_mut().define(name, value.clone());
+                    subinterpreter
+                        .get_environment()
+                        .borrow_mut()
+                        .define(name, value.clone());
                 }
+                // Then execute the body.
+                subinterpreter.eval_stmt(Stmt::Block(body.clone()))?;
                 Ok(LoxValue::Nil)
             }
-            Callable::Native(f) => (f.function)(env, args),
+            Callable::Native(f) => (f.function)(subinterpreter.get_environment(), args),
         }
     }
 }

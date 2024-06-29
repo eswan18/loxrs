@@ -1180,4 +1180,10 @@ mod tests {
             }
         }
     }
+
+    fn stuff() {
+        let input = "fun add(a, b) { return a + b; } print add(3, 4); print add(1, 2);";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+    }
 }

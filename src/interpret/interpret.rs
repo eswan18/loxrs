@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 pub struct Interpreter<W: Write> {
     // Where to direct the output of "print"
-    writer: W,
+    writer: Rc<RefCell<W>>,
     // The global variable environment.
     globals: Rc<RefCell<Environment>>,
     // The current variable environment.
@@ -39,7 +39,7 @@ impl<W: Write> Interpreter<W> {
         let globals = Rc::new(RefCell::new(root_env));
 
         Self {
-            writer,
+            writer: Rc::new(RefCell::new(writer)),
             globals: globals.clone(),
             environment: globals.clone(),
         }
@@ -52,11 +52,15 @@ impl<W: Write> Interpreter<W> {
         Ok(())
     }
 
-    fn eval_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeError> {
+    pub fn get_environment(&self) -> Rc<RefCell<Environment>> {
+        self.environment.clone()
+    }
+
+    pub fn eval_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Print(expr) => {
                 let value = self.eval_expr(expr)?;
-                writeln!(self.writer, "{}", value)
+                writeln!(self.writer.borrow_mut(), "{}", value)
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
             Stmt::Expression(expr) => {
@@ -85,17 +89,17 @@ impl<W: Write> Interpreter<W> {
                 }
             }
             Stmt::Block(stmts) => {
-                // Keep a reference to the old environment around so we can restore it later.
-                let old_env = self.environment.clone();
-                // Create a new environment enclosed with the old one, and make it our current environment.
-                let new_env = Environment::new(Some(old_env.clone()));
-                self.environment = Rc::new(RefCell::new(new_env));
-                // Evaluate the contained statements in this environment.
+                // Create a new subinterpreter with a new environment that points to the
+                // current one, and execute code there.
+                let new_env = Environment::new(Some(self.environment.clone()));
+                let mut subinterpreter = Interpreter {
+                    writer: self.writer.clone(),
+                    globals: self.globals.clone(),
+                    environment: Rc::new(RefCell::new(new_env)),
+                };
                 for stmt in stmts {
-                    self.eval_stmt(stmt)?;
+                    subinterpreter.eval_stmt(stmt)?;
                 }
-                // Reset the environment to the original one.
-                self.environment = old_env;
             }
             Stmt::If {
                 condition,
@@ -219,7 +223,13 @@ impl<W: Write> Interpreter<W> {
                         line,
                     });
                 }
-                callable.call(self.environment.clone(), arg_values)?
+                let subenvironment = Environment::new(Some(self.environment.clone()));
+                let subinterpreter = Interpreter {
+                    writer: self.writer.clone(),
+                    globals: self.globals.clone(),
+                    environment: Rc::new(RefCell::new(subenvironment)),
+                };
+                callable.call(subinterpreter, arg_values)?
             }
             Expr::Variable { name } => match self.environment.borrow().get(&name) {
                 Some(v) => v,
@@ -285,7 +295,7 @@ mod tests {
         let mock_writer: Vec<u8> = Vec::new();
         let mut interpreter = Interpreter::new(mock_writer);
         interpreter.interpret(ast)?;
-        let written = String::from_utf8(interpreter.writer).unwrap();
+        let written = String::from_utf8(interpreter.writer.borrow().clone()).unwrap();
         Ok(written)
     }
 
@@ -700,5 +710,11 @@ mod tests {
         let output = exec_ast("print clock();").unwrap();
         let output_as_f64: f64 = output.trim().parse().unwrap();
         assert!(output_as_f64 > 0.0);
+    }
+
+    fn udf_declaration_and_call() {
+        let output =
+            exec_ast("fun add(a, b) { return a + b; } print add(3, 4); print add(1, 2);").unwrap();
+        assert_eq!(output, "7\n3\n");
     }
 }
