@@ -149,7 +149,8 @@ impl Parser {
         let line = match self.advance_on_match(&[TokenType::While]) {
             Some(t) => t.line,
             None => {
-                return Err(ParseError::ExtraInput {
+                return Err(ParseError::ExpectedToken {
+                    token: TokenType::While,
                     line: self.peek().unwrap().line,
                 });
             }
@@ -190,7 +191,8 @@ impl Parser {
         let line = match self.advance_on_match(&[TokenType::For]) {
             Some(t) => t.line,
             None => {
-                return Err(ParseError::ExtraInput {
+                return Err(ParseError::ExpectedToken {
+                    token: TokenType::For,
                     line: self.peek().unwrap().line,
                 });
             }
@@ -256,7 +258,8 @@ impl Parser {
         let line = match self.advance_on_match(&[TokenType::If]) {
             Some(t) => t.line,
             None => {
-                return Err(ParseError::ExtraInput {
+                return Err(ParseError::ExpectedToken {
+                    token: TokenType::If,
                     line: self.peek().unwrap().line,
                 });
             }
@@ -292,7 +295,8 @@ impl Parser {
         let line = match self.advance_on_match(&[TokenType::Print]) {
             Some(t) => t.line,
             None => {
-                return Err(ParseError::ExtraInput {
+                return Err(ParseError::ExpectedToken {
+                    token: TokenType::Print,
                     line: self.peek().unwrap().line,
                 });
             }
@@ -628,12 +632,8 @@ impl Parser {
                 expression: Box::new(expr),
             });
         }
-        let last_line = self.tokens.last().unwrap().line;
-        let line = match self.peek() {
-            Some(token) => token.line,
-            None => last_line,
-        };
-        Err(ParseError::ExtraInput { line })
+        let next = self.peek().unwrap();
+        Err(ParseError::ExtraInput { line: next.line, next: next.clone() })
     }
 
     /// Move the current position to the next beginning of a statement.
@@ -696,6 +696,7 @@ impl Parser {
     fn advance(&mut self) -> &Token {
         let token = self.tokens.get(self.current).unwrap();
         if !self.is_at_end() {
+            println!("Advanced over token: {:?}", token.tp);
             self.current += 1;
         }
         token
@@ -808,7 +809,7 @@ mod tests {
         let input = "4 + 5 +";
         let tokens = scan(input.to_string()).unwrap();
         let error = Parser::new(tokens).parse_expression().unwrap_err();
-        assert_eq!(error, ParseError::ExtraInput { line: 1 });
+        assert_eq!(error, ParseError::ExtraInput { line: 1, next: Token { tp: TokenType::Eof, lexeme: "".to_string(), line: 1 } });
     }
 
     #[test]
@@ -1181,9 +1182,26 @@ mod tests {
         }
     }
 
-    fn stuff() {
-        let input = "fun add(a, b) { return a + b; } print add(3, 4); print add(1, 2);";
+    #[test]
+    fn fun_call() {
+        let input = "clock()";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        let expr_str = format!("{}", expr);
+        assert_eq!(expr_str, "clock()");
+    }
+
+    #[test]
+    fn call_with_args() {
+        let input = "fun add(a, b) { a + b; }\nadd(3, 4);";
         let tokens = scan(input.to_string()).unwrap();
         let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 2);
+        match (&stmts[0], &stmts[1]) {
+            (Stmt::Function { .. }, Stmt::Expression(expr)) => {
+                assert_eq!(format!("{}", expr), "add(3, 4)");
+            },
+            _ => panic!("The first statement should be a function declaration and the second an expression"),
+        }
     }
 }

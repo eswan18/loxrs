@@ -712,9 +712,12 @@ mod tests {
         assert!(output_as_f64 > 0.0);
     }
 
+    #[test]
     fn udf_declaration_and_call() {
-        let output =
-            exec_ast("fun add(a, b) { return a + b; } print add(3, 4); print add(1, 2);").unwrap();
+        let output = exec_ast(
+            "fun add(a, b) { return a + b; } print add(3, 4); print add(1, 2);",
+        )
+        .unwrap();
         assert_eq!(output, "7\n3\n");
     }
 }
