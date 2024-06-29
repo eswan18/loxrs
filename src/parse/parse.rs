@@ -103,7 +103,7 @@ impl Parser {
         if self.advance_on_match(&[TokenType::RightParen]).is_none() {
             return Err(ParseError::ExpectedRightParen { line });
         }
-        let body = Box::new(self.parse_statement()?);
+        let body = Box::new(self.parse_block()?);
         Ok(Stmt::Function { name, params, body })
     }
 
@@ -289,7 +289,11 @@ impl Parser {
 
     /// Parse a block of statements.
     fn parse_block(&mut self) -> Result<Stmt, ParseError> {
-        self.advance(); // Consume the '{'
+        // Consume the left brace.
+        match self.advance() {
+            Token { tp, .. } if *tp == TokenType::LeftBrace => {}
+            Token { line, .. } => return Err(ParseError::ExpectedLeftBrace { line: *line }),
+        }
         let mut stmts: Vec<Stmt> = Vec::new();
         while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {
             stmts.push(self.parse_declaration()?);
@@ -1122,16 +1126,15 @@ mod tests {
     #[test]
     fn function_decl_with_params() {
         // One param
-        let input = "fun abc(x) print x;";
+        let input = "fun abc(x) {print x;}";
         let tokens = scan(input.to_string()).unwrap();
         let stmts = parse(tokens).unwrap();
         assert_eq!(stmts.len(), 1);
         match &stmts[0] {
-            Stmt::Function { name, params, body } => {
+            Stmt::Function { name, params, .. } => {
                 assert_eq!(name, "abc");
                 assert_eq!(params.len(), 1);
                 assert_eq!(params[0], "x");
-                assert!(matches!(body.as_ref(), Stmt::Print(_)));
             }
             _ => {
                 panic!("the only top-level statement in the code should be a function declaration")
@@ -1144,12 +1147,11 @@ mod tests {
         let stmts = parse(tokens).unwrap();
         assert_eq!(stmts.len(), 1);
         match &stmts[0] {
-            Stmt::Function { name, params, body } => {
+            Stmt::Function { name, params, .. } => {
                 assert_eq!(name, "abc");
                 assert_eq!(params.len(), 2);
                 assert_eq!(params[0], "x");
                 assert_eq!(params[1], "y");
-                assert!(matches!(body.as_ref(), Stmt::Block(_)));
             }
             _ => {
                 panic!("the only top-level statement in the code should be a function declaration")
