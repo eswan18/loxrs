@@ -6,6 +6,7 @@ pub enum ParseError {
     MissingRightParen { line: u32 },
     ExtraInput { line: u32 },
     ExpectedSemicolon { line: u32 },
+    ExpectedVar { line: u32 },
     ExpectedIdentifier { line: u32, entity: String },
     ExpectedLeftBrace { line: u32 },
     ExpectedRightBrace { line: u32 },
@@ -26,6 +27,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::ExpectedSemicolon { line } => {
                 write!(f, "ParseError [line {}]: Expected ';'", line)
+            }
+            ParseError::ExpectedVar { line } => {
+                write!(f, "ParseError [line {}]: Expected 'var' keyword", line)
             }
             ParseError::ExpectedIdentifier { line, entity } => {
                 write!(

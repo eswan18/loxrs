@@ -110,8 +110,14 @@ impl Parser {
     /// Parse a variable declaration.
     fn parse_var_declaration(&mut self) -> Result<Stmt, ParseError> {
         // Consume the 'var' token.
-        let var_token = self.advance();
-        let line = var_token.line;
+        let line = match self.advance_on_match(&[TokenType::Var]) {
+            Some(t) => t.line,
+            _ => {
+                return Err(ParseError::ExpectedVar {
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
         let name = match self.advance_on_match(&[TokenType::Identifier]) {
             Some(token) => token.lexeme.clone(),
             None => {
@@ -140,8 +146,14 @@ impl Parser {
     /// Parse a while statement.
     fn parse_while_statement(&mut self) -> Result<Stmt, ParseError> {
         // Consume the while token.
-        let while_token = self.advance();
-        let line = while_token.line;
+        let line = match self.advance_on_match(&[TokenType::While]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExtraInput {
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
         // Consume the left paren.
         if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
             return Err(ParseError::ExpectedLeftParen { line });
@@ -175,8 +187,14 @@ impl Parser {
     /// Parse a for statement.
     fn parse_for_statement(&mut self) -> Result<Stmt, ParseError> {
         // Consume the `for` token.
-        let for_token = self.advance();
-        let line = for_token.line;
+        let line = match self.advance_on_match(&[TokenType::For]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExtraInput {
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
         // Consume the left paren.
         if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
             return Err(ParseError::ExpectedLeftParen { line });
@@ -235,18 +253,21 @@ impl Parser {
 
     fn parse_if_statement(&mut self) -> Result<Stmt, ParseError> {
         // Consume the 'if' token.
-        let if_token = self.advance().clone();
+        let line = match self.advance_on_match(&[TokenType::If]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExtraInput {
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
         // Start by parsing the parens and enclosed condition expression.
         if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
-            return Err(ParseError::ExpectedLeftParen {
-                line: if_token.line,
-            });
+            return Err(ParseError::ExpectedLeftParen { line });
         }
         let condition = self.parse_expression()?;
         if self.advance_on_match(&[TokenType::RightParen]).is_none() {
-            return Err(ParseError::ExpectedRightParen {
-                line: if_token.line,
-            });
+            return Err(ParseError::ExpectedRightParen { line });
         }
         // Parse the then-branch (probably a block).
         let then_branch = Box::new(self.parse_statement()?);
@@ -268,8 +289,14 @@ impl Parser {
     /// Parse a print statement.
     fn parse_print_statement(&mut self) -> Result<Stmt, ParseError> {
         // Consume the print token.
-        let print_token = self.advance();
-        let line = print_token.line;
+        let line = match self.advance_on_match(&[TokenType::Print]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExtraInput {
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
         let expr = self.parse_expression()?;
         match self.advance_on_match(&[TokenType::Semicolon]) {
             Some(_) => Ok(Stmt::Print(expr)),
@@ -290,10 +317,14 @@ impl Parser {
     /// Parse a block of statements.
     fn parse_block(&mut self) -> Result<Stmt, ParseError> {
         // Consume the left brace.
-        match self.advance() {
-            Token { tp, .. } if *tp == TokenType::LeftBrace => {}
-            Token { line, .. } => return Err(ParseError::ExpectedLeftBrace { line: *line }),
-        }
+        let line = match self.advance_on_match(&[TokenType::LeftBrace]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExtraInput {
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
         let mut stmts: Vec<Stmt> = Vec::new();
         while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {
             stmts.push(self.parse_declaration()?);
@@ -371,9 +402,7 @@ impl Parser {
         let mut expr = self.parse_comparison()?;
 
         let equality_operators = [TokenType::BangEqual, TokenType::EqualEqual];
-        while self.check_current_token_type(&equality_operators) {
-            // Unwrapping here is safe because we just checked that the token is one of these.
-            let token = self.peek().unwrap();
+        while let Some(token) = self.advance_on_match(&equality_operators) {
             let op_type = match token.tp {
                 TokenType::BangEqual => BinaryOperatorType::BangEqual,
                 TokenType::EqualEqual => BinaryOperatorType::EqualEqual,
@@ -383,7 +412,6 @@ impl Parser {
                 tp: op_type,
                 line: token.line,
             };
-            self.advance();
             let right = self.parse_comparison()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
@@ -404,9 +432,7 @@ impl Parser {
             TokenType::Less,
             TokenType::LessEqual,
         ];
-        while self.check_current_token_type(&comparison_operators) {
-            // Unwrapping here is safe because we just checked that the token is one of these.
-            let token = self.peek().unwrap();
+        while let Some(token) = self.advance_on_match(&comparison_operators) {
             let op_type = match token.tp {
                 TokenType::Greater => BinaryOperatorType::Greater,
                 TokenType::GreaterEqual => BinaryOperatorType::GreaterEqual,
@@ -418,7 +444,6 @@ impl Parser {
                 tp: op_type,
                 line: token.line,
             };
-            self.advance();
             let right = self.parse_term()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
