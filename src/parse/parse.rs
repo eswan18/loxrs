@@ -41,12 +41,70 @@ impl Parser {
 
     // Parsing statements
 
+    /// Parse any statement that declares something -- a function or a variable.
     fn parse_declaration(&mut self) -> Result<Stmt, ParseError> {
-        if self.check_current_token_type(&[TokenType::Var]) {
+        if self.advance_on_match(&[TokenType::Fun]).is_some() {
+            self.parse_fun_declaration(false)
+        } else if self.check_current_token_type(&[TokenType::Var]) {
             self.parse_var_declaration()
         } else {
             self.parse_statement()
         }
+    }
+
+    /// Parse a function declaration.
+    fn parse_fun_declaration(&mut self, is_method: bool) -> Result<Stmt, ParseError> {
+        // Set some variables that we'll use for diagnostic error messages.
+        let line = self.peek().unwrap().line;
+        let entity = match is_method {
+            true => String::from("method definition"),
+            false => String::from("function definition"),
+        };
+
+        // Note that the "Fun" token is already consumed before this method is called.
+        let name = match self.advance_on_match(&[TokenType::Identifier]) {
+            Some(t) => t.lexeme.clone(),
+            None => return Err(ParseError::ExpectedIdentifier { line, entity }),
+        };
+        // Consume left paren.
+        if self.advance_on_match(&[TokenType::LeftParen]).is_none() {
+            return Err(ParseError::ExpectedLeftParen { line });
+        }
+        // Parse parameters.
+        let mut params: Vec<String> = Vec::new();
+        if !self.check_current_token_type(&[TokenType::RightParen]) {
+            // Consume a param.
+            match self.advance_on_match(&[TokenType::Identifier]) {
+                Some(t) => params.push(t.lexeme.clone()),
+                None => {
+                    return Err(ParseError::ExpectedIdentifier {
+                        line,
+                        entity: String::from("parameter definition"),
+                    })
+                }
+            }
+            // Continue while there are commas.
+            while self.advance_on_match(&[TokenType::Comma]).is_some() {
+                match self.advance_on_match(&[TokenType::Identifier]) {
+                    Some(t) => params.push(t.lexeme.clone()),
+                    None => {
+                        return Err(ParseError::ExpectedIdentifier {
+                            line,
+                            entity: String::from("parameter definition"),
+                        })
+                    }
+                }
+                if params.len() >= 255 {
+                    return Err(ParseError::TooManyArguments { line });
+                }
+            }
+        }
+        // Consume right paren.
+        if self.advance_on_match(&[TokenType::RightParen]).is_none() {
+            return Err(ParseError::ExpectedRightParen { line });
+        }
+        let body = Box::new(self.parse_statement()?);
+        Ok(Stmt::Function { name, params, body })
     }
 
     /// Parse a variable declaration.
@@ -57,7 +115,10 @@ impl Parser {
         let name = match self.advance_on_match(&[TokenType::Identifier]) {
             Some(token) => token.lexeme.clone(),
             None => {
-                return Err(ParseError::ExpectedIdentifier { line });
+                return Err(ParseError::ExpectedIdentifier {
+                    line,
+                    entity: String::from("variable declaration"),
+                });
             }
         };
         // Check if there is an initial value (which is optional).
@@ -1032,5 +1093,67 @@ mod tests {
         let tokens = scan(func_call_input).unwrap();
         let error = Parser::new(tokens).parse_expression().unwrap_err();
         assert_eq!(error, ParseError::TooManyArguments { line: 1 });
+    }
+
+    #[test]
+    fn function_decl_without_params() {
+        let input = "fun abc() { print 3; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::Function { name, params, body } => {
+                assert_eq!(name, "abc");
+                assert_eq!(params.len(), 0);
+                match body.as_ref() {
+                    Stmt::Block(stmts) => {
+                        assert_eq!(stmts.len(), 1);
+                        assert!(matches!(stmts[0], Stmt::Print(_)));
+                    }
+                    _ => panic!("the body should be a block"),
+                }
+            }
+            _ => {
+                panic!("the only top-level statement in the code should be a function declaration")
+            }
+        }
+    }
+
+    #[test]
+    fn function_decl_with_params() {
+        // One param
+        let input = "fun abc(x) print x;";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::Function { name, params, body } => {
+                assert_eq!(name, "abc");
+                assert_eq!(params.len(), 1);
+                assert_eq!(params[0], "x");
+                assert!(matches!(body.as_ref(), Stmt::Print(_)));
+            }
+            _ => {
+                panic!("the only top-level statement in the code should be a function declaration")
+            }
+        }
+
+        // Multiple params
+        let input = "fun abc(x, y) { print x; print y; }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        match &stmts[0] {
+            Stmt::Function { name, params, body } => {
+                assert_eq!(name, "abc");
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[0], "x");
+                assert_eq!(params[1], "y");
+                assert!(matches!(body.as_ref(), Stmt::Block(_)));
+            }
+            _ => {
+                panic!("the only top-level statement in the code should be a function declaration")
+            }
+        }
     }
 }

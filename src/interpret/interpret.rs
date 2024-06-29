@@ -53,14 +53,15 @@ impl<W: Write> Interpreter<W> {
 
     fn eval_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeError> {
         match stmt {
-            Stmt::Expression(expr) => {
-                self.eval_expr(expr)?;
-            }
             Stmt::Print(expr) => {
                 let value = self.eval_expr(expr)?;
                 writeln!(self.writer, "{}", value)
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
+            Stmt::Expression(expr) => {
+                self.eval_expr(expr)?;
+            }
+            Stmt::Function { name, params, body } => todo!(),
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
                     Some(expr) => self.eval_expr(expr)?,

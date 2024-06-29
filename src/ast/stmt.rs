@@ -7,6 +7,11 @@ use crate::ast::expr::Expr;
 pub enum Stmt {
     Print(Expr),
     Expression(Expr),
+    Function {
+        name: String,
+        params: Vec<String>,
+        body: Box<Stmt>,
+    },
     Var {
         name: String,
         initializer: Option<Expr>,
@@ -28,6 +33,16 @@ impl Display for Stmt {
         match self {
             Stmt::Print(expr) => write!(f, "Print({});", expr),
             Stmt::Expression(expr) => write!(f, "{};", expr),
+            Stmt::Function { name, params, body } => {
+                write!(f, "fun {}(", name)?;
+                for (i, param) in params.iter().enumerate() {
+                    write!(f, "{}", param)?;
+                    if i < params.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ") {}", body)
+            }
             Stmt::Var { name, initializer } => match initializer {
                 Some(expr) => write!(f, "var {} = {};", name, expr),
                 None => write!(f, "var {};", name),
