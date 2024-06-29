@@ -633,7 +633,10 @@ impl Parser {
             });
         }
         let next = self.peek().unwrap();
-        Err(ParseError::ExtraInput { line: next.line, next: next.clone() })
+        Err(ParseError::ExtraInput {
+            line: next.line,
+            next: next.clone(),
+        })
     }
 
     /// Move the current position to the next beginning of a statement.
@@ -809,7 +812,17 @@ mod tests {
         let input = "4 + 5 +";
         let tokens = scan(input.to_string()).unwrap();
         let error = Parser::new(tokens).parse_expression().unwrap_err();
-        assert_eq!(error, ParseError::ExtraInput { line: 1, next: Token { tp: TokenType::Eof, lexeme: "".to_string(), line: 1 } });
+        assert_eq!(
+            error,
+            ParseError::ExtraInput {
+                line: 1,
+                next: Token {
+                    tp: TokenType::Eof,
+                    lexeme: "".to_string(),
+                    line: 1
+                }
+            }
+        );
     }
 
     #[test]
@@ -1200,8 +1213,10 @@ mod tests {
         match (&stmts[0], &stmts[1]) {
             (Stmt::Function { .. }, Stmt::Expression(expr)) => {
                 assert_eq!(format!("{}", expr), "add(3, 4)");
-            },
-            _ => panic!("The first statement should be a function declaration and the second an expression"),
+            }
+            _ => panic!(
+                "The first statement should be a function declaration and the second an expression"
+            ),
         }
     }
 }

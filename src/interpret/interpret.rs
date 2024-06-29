@@ -713,11 +713,29 @@ mod tests {
     }
 
     #[test]
-    fn udf_declaration_and_call() {
+    fn udf_decl_and_call_void_function() {
+        let output = exec_ast("fun do(a, b) { print(3); } var x = do(3, 4); print x;").unwrap();
+        assert_eq!(output, "3\nnil\n");
+    }
+
+    #[test]
+    fn udf_can_read_outer_scope() {
+        let output = exec_ast("var x = 3; fun do(a, b) { print(x); } do(3, 4);").unwrap();
+        assert_eq!(output, "3\n");
+    }
+
+    #[test]
+    fn udf_can_modify_outer_scope() {
+        let output = exec_ast("var x = 3; fun do(a, b) { x = 4; } do(3, 4); print x;").unwrap();
+        assert_eq!(output, "4\n");
+    }
+
+    #[test]
+    fn udf_can_enclose_variables() {
         let output = exec_ast(
-            "fun add(a, b) { return a + b; } print add(3, 4); print add(1, 2);",
+            "var myfunc; { var x = 3; fun inner() { print x; } myfunc = inner;} myfunc();",
         )
         .unwrap();
-        assert_eq!(output, "7\n3\n");
+        assert_eq!(output, "3\n");
     }
 }

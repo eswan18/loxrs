@@ -1,4 +1,7 @@
-use crate::{ast::Expr, token::{Token, TokenType}};
+use crate::{
+    ast::Expr,
+    token::{Token, TokenType},
+};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -6,7 +9,7 @@ pub enum ParseError {
     MissingRightParen { line: u32 },
     ExtraInput { line: u32, next: Token },
     ExpectedSemicolon { line: u32 },
-    ExpectedToken { line: u32, token: TokenType},
+    ExpectedToken { line: u32, token: TokenType },
     ExpectedVar { line: u32 },
     ExpectedIdentifier { line: u32, entity: String },
     ExpectedLeftBrace { line: u32 },
