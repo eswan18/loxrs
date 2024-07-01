@@ -176,6 +176,8 @@ impl Parser {
             self.parse_if_statement()
         } else if self.check_current_token_type(&[TokenType::Print]) {
             self.parse_print_statement()
+        } else if self.check_current_token_type(&[TokenType::Return]) {
+            self.parse_return_statement()
         } else if self.check_current_token_type(&[TokenType::While]) {
             self.parse_while_statement()
         } else if self.check_current_token_type(&[TokenType::LeftBrace]) {
@@ -304,6 +306,27 @@ impl Parser {
         let expr = self.parse_expression()?;
         match self.advance_on_match(&[TokenType::Semicolon]) {
             Some(_) => Ok(Stmt::Print(expr)),
+            None => Err(ParseError::ExpectedSemicolon { line }),
+        }
+    }
+
+    fn parse_return_statement(&mut self) -> Result<Stmt, ParseError> {
+        // Consume the return token.
+        let line = match self.advance_on_match(&[TokenType::Return]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExpectedToken {
+                    token: TokenType::Return,
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
+        let expr = match self.check_current_token_type(&[TokenType::Semicolon]) {
+            true => None,
+            false => Some(self.parse_expression()?),
+        };
+        match self.advance_on_match(&[TokenType::Semicolon]) {
+            Some(_) => Ok(Stmt::Return(expr)),
             None => Err(ParseError::ExpectedSemicolon { line }),
         }
     }
@@ -1217,6 +1240,33 @@ mod tests {
             _ => panic!(
                 "The first statement should be a function declaration and the second an expression"
             ),
+        }
+    }
+
+    #[test]
+    fn call_with_return() {
+        let input = "fun add(a, b) { return a + b; }\nadd(3, 4);";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 2);
+        let fn_stmt = match (&stmts[0], &stmts[1]) {
+            (f @ Stmt::Function { .. }, Stmt::Expression(expr)) => {
+                assert_eq!(format!("{}", expr), "add(3, 4)");
+                f
+            }
+            _ => panic!(
+                "The first statement should be a function declaration and the second an expression"
+            ),
+        };
+        match fn_stmt {
+            Stmt::Function { body, .. } => match body.as_ref() {
+                Stmt::Block(stmts) => {
+                    assert_eq!(stmts.len(), 1);
+                    assert!(matches!(stmts[0], Stmt::Return(_)));
+                }
+                _ => panic!("The function body should be a block"),
+            },
+            _ => panic!("The first statement should be a function declaration"),
         }
     }
 }

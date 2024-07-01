@@ -6,6 +6,7 @@ use crate::ast::expr::Expr;
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
     Print(Expr),
+    Return(Option<Expr>),
     Expression(Expr),
     Function {
         name: String,
@@ -32,6 +33,10 @@ impl Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Stmt::Print(expr) => write!(f, "Print({});", expr),
+            Stmt::Return(expr) => match expr {
+                Some(expr) => write!(f, "Return {};", expr),
+                None => write!(f, "Return;"),
+            },
             Stmt::Expression(expr) => write!(f, "{};", expr),
             Stmt::Function { name, params, body } => {
                 write!(f, "fun {}(", name)?;

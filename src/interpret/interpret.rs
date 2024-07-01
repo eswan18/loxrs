@@ -67,6 +67,13 @@ impl<W: Write> Interpreter<W> {
                 writeln!(self.writer.borrow_mut(), "{}", value)
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
+            Stmt::Return(expr) => {
+                let return_val = match expr {
+                    None => V::Nil,
+                    Some(expr) => self.eval_expr(expr)?,
+                };
+                return Err(RuntimeError::ReturnCall(return_val));
+            }
             Stmt::Expression(expr) => {
                 self.eval_expr(expr)?;
             }
@@ -191,14 +198,14 @@ impl<W: Write> Interpreter<W> {
                     // Plus is special, since it works on numbers or strings.
                     BinaryOperatorType::Plus => match (left, right) {
                         (V::Number(l), V::Number(r)) => V::Number(l + r),
-                        (V::String(l), V::String(r)) => V::String(l + &r),
+                        (V::String(l), V::String(r)) => V::String(format!("{}{}", l, r)),
                         (l, r) => {
                             return Err(RuntimeError::BinaryOpTypeError {
                                 operator,
                                 left: l.tp(),
                                 right: r.tp(),
                                 line: operator.line,
-                            })
+                            });
                         }
                     },
                     BinaryOperatorType::BangEqual => V::Boolean(left != right),
@@ -236,7 +243,12 @@ impl<W: Write> Interpreter<W> {
                     globals: self.globals.clone(),
                     environment: self.globals.clone(),
                 };
-                callable.call(subinterpreter, arg_values)?
+                // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
+                match callable.call(subinterpreter, arg_values) {
+                    Ok(v) => v,
+                    Err(RuntimeError::ReturnCall(v)) => v,
+                    Err(err) => return Err(err),
+                }
             }
             Expr::Variable { name } => match self.environment.borrow().get(&name) {
                 Some(v) => v,
@@ -781,5 +793,17 @@ mod tests {
             exec_ast("fun decrement(n) { print n; if (n > 1) { decrement(n-1); } } decrement(5);")
                 .unwrap();
         assert_eq!(output, "5\n4\n3\n2\n1\n");
+    }
+
+    #[test]
+    fn udf_with_return() {
+        let output = exec_ast("fun do() { return 5; } print do() + 5;").unwrap();
+        assert_eq!(output, "10\n");
+    }
+
+    #[test]
+    fn udf_with_deeply_nested_return() {
+        let output = exec_ast("fun do(x) { x = x + 5; while (x < 50) { print x; x = x + x; if (x > 10) { return x; }}} print do(7);").unwrap();
+        assert_eq!(output, "12\n24\n");
     }
 }

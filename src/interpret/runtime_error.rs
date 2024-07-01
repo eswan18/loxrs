@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::ast::{BinaryOperator, UnaryOperator};
-use crate::value::LoxType;
+use crate::value::{LoxType, LoxValue};
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -27,6 +27,8 @@ pub enum RuntimeError {
     },
     IOError(std::io::Error),
     UndefinedVariable(String),
+    // A return call isn't an error per se, but using an error lets us elegantly propagate the return value up the stack.
+    ReturnCall(LoxValue),
 }
 
 impl PartialEq for RuntimeError {
@@ -84,6 +86,7 @@ impl PartialEq for RuntimeError {
                 err1.kind() == err2.kind()
             }
             (RuntimeError::UndefinedVariable(v1), RuntimeError::UndefinedVariable(v2)) => v1 == v2,
+            (RuntimeError::ReturnCall(v1), RuntimeError::ReturnCall(v2)) => v1 == v2,
             _ => false,
         }
     }
@@ -134,6 +137,7 @@ impl fmt::Display for RuntimeError {
             RuntimeError::UndefinedVariable(name) => {
                 write!(f, "Undefined variable '{}'", name)
             }
+            RuntimeError::ReturnCall(value) => write!(f, "ReturnCall: {}", value),
         }
     }
 }
