@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::value::LoxValue;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -8,7 +10,7 @@ use crate::interpret::RuntimeError;
 #[derive(Debug, PartialEq)]
 pub struct Environment {
     pub enclosing: Option<Rc<RefCell<Environment>>>,
-    values: HashMap<String, LoxValue>,
+    pub values: HashMap<String, LoxValue>,
 }
 
 impl Environment {
@@ -21,6 +23,10 @@ impl Environment {
 
     /// Define a new variable or overwrite an existing one.
     pub fn define(&mut self, name: &str, value: LoxValue) {
+        trace!("Defining {} as {}", name, value);
+        if self.values.contains_key(name) {
+            trace!("Overwriting {} with {}", name, value);
+        }
         self.values.insert(name.to_string(), value);
     }
 
@@ -43,6 +49,7 @@ impl Environment {
 
     pub fn assign(&mut self, name: &str, value: LoxValue) -> Result<(), RuntimeError> {
         if self.values.contains_key(name) {
+            trace!("Assigning {} to {} (depth {})", value, name, self.depth());
             self.values.insert(name.to_string(), value);
             Ok(())
         } else {
@@ -51,6 +58,13 @@ impl Environment {
             } else {
                 Err(RuntimeError::UndefinedVariable(name.to_string()))
             }
+        }
+    }
+
+    pub fn depth(&self) -> usize {
+        match self.enclosing.as_ref() {
+            Some(enclosing) => 1 + enclosing.borrow().depth(),
+            None => 0,
         }
     }
 }

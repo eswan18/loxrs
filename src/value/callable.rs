@@ -75,7 +75,8 @@ impl Callable {
             }) => {
                 // Note that arity checks happen in the interpreter so we don't worry about them here.
                 // Replace the interpreter's environment with this function's closure.
-                subinterpreter.set_environment(closure.clone());
+                let subinterpreter_env = Environment::new(Some(closure.clone()));
+                subinterpreter.set_environment(Rc::new(RefCell::new(subinterpreter_env)));
                 // Start by defining variables for each argument.
                 for (name, value) in param_names.iter().zip(args.iter()) {
                     subinterpreter

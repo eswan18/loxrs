@@ -3,6 +3,7 @@ use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 use crate::value::{Callable, NativeFunction, UserDefinedFunction};
+use log::{debug, error, trace};
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
@@ -72,6 +73,7 @@ impl<W: Write> Interpreter<W> {
                     None => V::Nil,
                     Some(expr) => self.eval_expr(expr)?,
                 };
+                trace!("returning from function with value {:?}", return_val);
                 return Err(RuntimeError::ReturnCall(return_val));
             }
             Stmt::Expression(expr) => {
@@ -163,7 +165,7 @@ impl<W: Write> Interpreter<W> {
             } => {
                 let left = self.eval_expr(*left)?;
                 let right = self.eval_expr(*right)?;
-                match operator.tp {
+                let result = match operator.tp {
                     // Arithmetic and comparison operators that always require two numbers.
                     BinaryOperatorType::Minus
                     | BinaryOperatorType::Slash
@@ -174,16 +176,21 @@ impl<W: Write> Interpreter<W> {
                     | BinaryOperatorType::LessEqual => {
                         match (left, right) {
                             // If both operands are numbers, return the result.
-                            (V::Number(l), V::Number(r)) => match operator.tp {
-                                BinaryOperatorType::Minus => V::Number(l - r),
-                                BinaryOperatorType::Slash => V::Number(l / r),
-                                BinaryOperatorType::Star => V::Number(l * r),
-                                BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
-                                BinaryOperatorType::Greater => V::Boolean(l > r),
-                                BinaryOperatorType::LessEqual => V::Boolean(l <= r),
-                                BinaryOperatorType::Less => V::Boolean(l < r),
-                                _ => unreachable!("we already matched to one of these operators"),
-                            },
+                            (V::Number(l), V::Number(r)) => {
+                                debug!("Computing {:?} {} {:?}", l, operator.tp, r);
+                                match operator.tp {
+                                    BinaryOperatorType::Minus => V::Number(l - r),
+                                    BinaryOperatorType::Slash => V::Number(l / r),
+                                    BinaryOperatorType::Star => V::Number(l * r),
+                                    BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
+                                    BinaryOperatorType::Greater => V::Boolean(l > r),
+                                    BinaryOperatorType::LessEqual => V::Boolean(l <= r),
+                                    BinaryOperatorType::Less => V::Boolean(l < r),
+                                    _ => {
+                                        unreachable!("we already matched to one of these operators")
+                                    }
+                                }
+                            }
                             (l, r) => {
                                 // If at least one operator isn't a number, that's invalid.
                                 return Err(RuntimeError::BinaryOpTypeError {
@@ -210,7 +217,9 @@ impl<W: Write> Interpreter<W> {
                     },
                     BinaryOperatorType::BangEqual => V::Boolean(left != right),
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
-                }
+                };
+                debug!("result: {:?}", result);
+                result
             }
             Expr::Call { callee, args, line } => {
                 let callee = self.eval_expr(*callee)?;
@@ -222,7 +231,10 @@ impl<W: Write> Interpreter<W> {
                     .collect::<Result<Vec<V>, RuntimeError>>()?;
                 // Unwrap the callable or throw an error if it's not callable.
                 let callable = match callee {
-                    V::Callable(callable) => callable,
+                    V::Callable(callable) => {
+                        trace!("Function called with args: {:?}", arg_values[0]);
+                        callable
+                    }
                     v => {
                         return Err(RuntimeError::CallableTypeError {
                             uncallable_type: v.tp(),
@@ -246,7 +258,10 @@ impl<W: Write> Interpreter<W> {
                 // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
                 match callable.call(subinterpreter, arg_values) {
                     Ok(v) => v,
-                    Err(RuntimeError::ReturnCall(v)) => v,
+                    Err(RuntimeError::ReturnCall(v)) => {
+                        debug!("catching return call: {:?}", v);
+                        v
+                    }
                     Err(err) => return Err(err),
                 }
             }
@@ -805,5 +820,14 @@ mod tests {
     fn udf_with_deeply_nested_return() {
         let output = exec_ast("fun do(x) { x = x + 5; while (x < 50) { print x; x = x + x; if (x > 10) { return x; }}} print do(7);").unwrap();
         assert_eq!(output, "12\n24\n");
+    }
+
+    #[test]
+    fn fib() {
+        let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(2);").unwrap();
+        assert_eq!(output, "2\n");
+
+        let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(8);").unwrap();
+        assert_eq!(output, "21\n");
     }
 }

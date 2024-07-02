@@ -4,6 +4,7 @@ use crate::ast::{
 };
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
+use log::{debug, error, trace};
 
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, Vec<ParseError>> {
     let mut parser = Parser::new(tokens);
@@ -35,6 +36,7 @@ impl Parser {
         if errors.len() > 0 {
             Err(errors)
         } else {
+            debug!("Parsed statements: {:?}", stmts);
             Ok(stmts)
         }
     }
@@ -664,6 +666,7 @@ impl Parser {
 
     /// Move the current position to the next beginning of a statement.
     fn synchronize(&mut self) -> () {
+        error!("Synchronizing");
         while !self.is_at_end() {
             let t = match self.peek() {
                 Some(token) => token,
@@ -722,7 +725,7 @@ impl Parser {
     fn advance(&mut self) -> &Token {
         let token = self.tokens.get(self.current).unwrap();
         if !self.is_at_end() {
-            println!("Advanced over token: {:?}", token.tp);
+            trace!("Advanced over token: {:?}", token.tp);
             self.current += 1;
         }
         token
@@ -1267,6 +1270,24 @@ mod tests {
                 _ => panic!("The function body should be a block"),
             },
             _ => panic!("The first statement should be a function declaration"),
+        }
+    }
+
+    #[test]
+    fn function_call_with_expr() {
+        let input = "var x = fib(n-2) + fib(n-1);";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt = &stmts[0];
+        match stmt {
+            Stmt::Var { initializer, .. } => match initializer.as_ref() {
+                Some(expr) => {
+                    assert_eq!(format!("{}", expr), "(+ fib((- n 2)) fib((- n 1)))");
+                }
+                _ => panic!("The initializer should be a binary expression"),
+            },
+            _ => panic!("The only top-level statement should be a variable declaration"),
         }
     }
 }
