@@ -1,3 +1,4 @@
+use log::debug;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -77,6 +78,10 @@ impl Callable {
                 // Replace the interpreter's environment with this function's closure.
                 let subinterpreter_env = Environment::new(Some(closure.clone()));
                 subinterpreter.set_environment(Rc::new(RefCell::new(subinterpreter_env)));
+                debug!(
+                    "Created subinterpreter at level {}",
+                    subinterpreter.get_environment().borrow().depth()
+                );
                 // Start by defining variables for each argument.
                 for (name, value) in param_names.iter().zip(args.iter()) {
                     subinterpreter

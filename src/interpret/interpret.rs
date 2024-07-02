@@ -3,7 +3,7 @@ use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
 use crate::value::{Callable, NativeFunction, UserDefinedFunction};
-use log::{debug, error, trace};
+use log::{debug, trace};
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
@@ -73,7 +73,7 @@ impl<W: Write> Interpreter<W> {
                     None => V::Nil,
                     Some(expr) => self.eval_expr(expr)?,
                 };
-                trace!("returning from function with value {:?}", return_val);
+                debug!("return statement encountered with value {:?}", return_val);
                 return Err(RuntimeError::ReturnCall(return_val));
             }
             Stmt::Expression(expr) => {
@@ -177,7 +177,7 @@ impl<W: Write> Interpreter<W> {
                         match (left, right) {
                             // If both operands are numbers, return the result.
                             (V::Number(l), V::Number(r)) => {
-                                debug!("Computing {:?} {} {:?}", l, operator.tp, r);
+                                trace!("Computing {:?} {} {:?}", l, operator.tp, r);
                                 match operator.tp {
                                     BinaryOperatorType::Minus => V::Number(l - r),
                                     BinaryOperatorType::Slash => V::Number(l / r),
@@ -218,7 +218,6 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::BangEqual => V::Boolean(left != right),
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 };
-                debug!("result: {:?}", result);
                 result
             }
             Expr::Call { callee, args, line } => {
