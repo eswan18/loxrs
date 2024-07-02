@@ -109,3 +109,13 @@ impl Token {
         Token { tp, lexeme, line }
     }
 }
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.tp {
+            TokenType::String(s) => write!(f, "{}", s),
+            TokenType::Number(n) => write!(f, "{}", n),
+            _ => write!(f, "{}", self.tp),
+        }
+    }
+}

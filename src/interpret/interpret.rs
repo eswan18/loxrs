@@ -823,10 +823,7 @@ mod tests {
 
     #[test]
     fn fib() {
-        let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(2);").unwrap();
-        assert_eq!(output, "2\n");
-
-        let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(8);").unwrap();
-        assert_eq!(output, "21\n");
+        let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(2); print fib(8);").unwrap();
+        assert_eq!(output, "1\n21\n");
     }
 }

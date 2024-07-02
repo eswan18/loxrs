@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::info;
+
 use crate::scan::scan_error::ScanError;
 use crate::token::{Token, TokenType};
 
@@ -57,6 +59,13 @@ impl Scanner {
             return Err(self.errors.clone());
         } else {
             // Otherwise, return the tokens.
+            let token_string = self
+                .tokens
+                .iter()
+                .map(|t| t.to_string())
+                .collect::<Vec<String>>()
+                .join(" ");
+            info!("Tokens: {}", token_string);
             return Ok(self.tokens.clone());
         }
     }
