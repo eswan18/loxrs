@@ -90,7 +90,7 @@ impl Callable {
                         .define(name, value.clone());
                 }
                 // Then execute the body.
-                subinterpreter.eval_stmt(Stmt::Block(body.clone()))?;
+                subinterpreter.eval_stmt(&Stmt::Block(body.clone()))?;
                 Ok(LoxValue::Nil)
             }
             Callable::Native(f) => (f.function)(subinterpreter.get_environment(), args),

@@ -1,6 +1,6 @@
 use crate::ast::{
     Ast, BinaryOperator, BinaryOperatorType, Expr, LiteralValue, LogicalOperator,
-    LogicalOperatorType, Stmt, UnaryOperator, UnaryOperatorType,
+    LogicalOperatorType, Stmt, UnaryOperator, UnaryOperatorType, VariableReference,
 };
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
@@ -105,7 +105,22 @@ impl Parser {
         if self.advance_on_match(&[TokenType::RightParen]).is_none() {
             return Err(ParseError::ExpectedRightParen { line });
         }
-        let body = Box::new(self.parse_block()?);
+        // Consume the left brace.
+        if self.advance_on_match(&[TokenType::LeftBrace]).is_none() {
+            return Err(ParseError::ExpectedLeftBrace { line });
+        }
+        // Consume the function body until we hit a right brace.
+        let mut body: Vec<Stmt> = Vec::new();
+        while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {
+            match self.parse_declaration() {
+                Ok(stmt) => body.push(stmt),
+                Err(err) => return Err(err),
+            }
+        }
+        // Consme the right brace.
+        if self.advance_on_match(&[TokenType::RightBrace]).is_none() {
+            return Err(ParseError::ExpectedRightBrace { line });
+        }
         Ok(Stmt::Function { name, params, body })
     }
 
@@ -378,8 +393,8 @@ impl Parser {
             let value = self.parse_assignment()?;
             return match expr {
                 // The assignment is only valid if the left hand side is a variable.
-                Expr::Variable { name } => Ok(Expr::Assignment {
-                    name,
+                Expr::Variable(reference) => Ok(Expr::Assignment {
+                    reference,
                     value: Box::new(value),
                 }),
                 _ => Err(ParseError::InvalidAssignmentTarget { line, expr }),
@@ -633,9 +648,10 @@ impl Parser {
         }
 
         if let Some(id_token) = self.advance_on_match(&[TokenType::Identifier]) {
-            return Ok(Expr::Variable {
+            return Ok(Expr::Variable(VariableReference {
                 name: id_token.lexeme.clone(),
-            });
+                id: Expr::new_id(),
+            }));
         }
 
         // If we didn't match anything yet, look for a grouping expression.
@@ -853,51 +869,11 @@ mod tests {
 
     #[test]
     fn error_invalid_assignment_target() {
-        let inputs = [
-            (
-                "3 = 3",
-                Expr::Literal {
-                    value: LiteralValue::Number(3.0),
-                },
-            ),
-            (
-                "3 * x = 3",
-                Expr::Binary {
-                    left: Box::new(Expr::Literal {
-                        value: LiteralValue::Number(3.0),
-                    }),
-                    operator: BinaryOperator {
-                        tp: BinaryOperatorType::Star,
-                        line: 1,
-                    },
-                    right: Box::new(Expr::Variable {
-                        name: "x".to_string(),
-                    }),
-                },
-            ),
-            (
-                "true = 3",
-                Expr::Literal {
-                    value: LiteralValue::Boolean(true),
-                },
-            ),
-            (
-                "\"abc\" = 3",
-                Expr::Literal {
-                    value: LiteralValue::String("abc".to_string()),
-                },
-            ),
-        ];
-        for (input, target) in inputs {
+        let inputs = ["3 = 3", "3 * x = 3", "true = 3", "\"abc\" = 3"];
+        for input in inputs {
             let tokens = scan(input.to_string()).unwrap();
             let error = Parser::new(tokens).parse_expression().unwrap_err();
-            assert_eq!(
-                error,
-                ParseError::InvalidAssignmentTarget {
-                    expr: target,
-                    line: 1
-                }
-            )
+            assert!(matches!(error, ParseError::InvalidAssignmentTarget { .. }));
         }
     }
 
@@ -1171,13 +1147,9 @@ mod tests {
             Stmt::Function { name, params, body } => {
                 assert_eq!(name, "abc");
                 assert_eq!(params.len(), 0);
-                match body.as_ref() {
-                    Stmt::Block(stmts) => {
-                        assert_eq!(stmts.len(), 1);
-                        assert!(matches!(stmts[0], Stmt::Print(_)));
-                    }
-                    _ => panic!("the body should be a block"),
-                }
+                assert_eq!(body.len(), 1);
+                let stmt = &body[0];
+                assert!(matches!(stmt, Stmt::Print(_)));
             }
             _ => {
                 panic!("the only top-level statement in the code should be a function declaration")
@@ -1262,13 +1234,11 @@ mod tests {
             ),
         };
         match fn_stmt {
-            Stmt::Function { body, .. } => match body.as_ref() {
-                Stmt::Block(stmts) => {
-                    assert_eq!(stmts.len(), 1);
-                    assert!(matches!(stmts[0], Stmt::Return(_)));
-                }
-                _ => panic!("The function body should be a block"),
-            },
+            Stmt::Function { body, .. } => {
+                assert_eq!(body.len(), 1);
+                let stmt = &body[0];
+                assert!(matches!(stmt, Stmt::Return(_)));
+            }
             _ => panic!("The first statement should be a function declaration"),
         }
     }

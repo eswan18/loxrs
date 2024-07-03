@@ -2,6 +2,12 @@ use std::fmt::Display;
 
 use crate::ast::operator::{BinaryOperator, LogicalOperator, UnaryOperator};
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct VariableReference {
+    pub name: String,
+    pub id: u32,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
     Number(f64),
@@ -37,13 +43,23 @@ pub enum Expr {
         operator: UnaryOperator,
         right: Box<Expr>,
     },
-    Variable {
-        name: String,
-    },
+    Variable(VariableReference),
     Assignment {
-        name: String,
+        reference: VariableReference,
         value: Box<Expr>,
     },
+}
+
+impl Expr {
+    /// Generate a monotonically increasing ID for each variable.
+    pub fn new_id() -> u32 {
+        static mut ID: u32 = 0;
+        unsafe {
+            let id = ID;
+            ID += 1;
+            id
+        }
+    }
 }
 
 impl Display for Expr {
@@ -83,10 +99,13 @@ impl Display for Expr {
             Expr::Unary { operator, right } => {
                 write!(f, "({} {})", operator, right)
             }
-            Expr::Variable { name } => {
-                write!(f, "{}", name)
+            Expr::Variable(var_ref) => {
+                write!(f, "{}", var_ref.name)
             }
-            Expr::Assignment { name, value } => {
+            Expr::Assignment {
+                reference: VariableReference { name, .. },
+                value,
+            } => {
                 write!(f, "({} = {})", name, value)
             }
         }

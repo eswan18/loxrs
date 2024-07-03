@@ -11,7 +11,7 @@ pub enum Stmt {
     Function {
         name: String,
         params: Vec<String>,
-        body: Box<Stmt>,
+        body: Vec<Stmt>,
     },
     Var {
         name: String,
@@ -46,7 +46,11 @@ impl Display for Stmt {
                         write!(f, ", ")?;
                     }
                 }
-                write!(f, ") {}", body)
+                write!(f, ") {{\n")?;
+                for stmt in body {
+                    write!(f, "{}\n", stmt)?;
+                }
+                write!(f, "}}")
             }
             Stmt::Var { name, initializer } => match initializer {
                 Some(expr) => write!(f, "var {} = {};", name, expr),

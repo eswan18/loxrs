@@ -47,7 +47,7 @@ impl fmt::Display for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             LoxValue::Number(n) => write!(f, "{}", n),
-            LoxValue::String(s) => write!(f, "\"{}\"", s),
+            LoxValue::String(s) => write!(f, "{}", s),
             LoxValue::Boolean(b) => write!(f, "{}", b),
             LoxValue::Callable(Callable::Native(_)) => write!(f, "<native-function>"),
             LoxValue::Callable(Callable::UserDefined(_)) => write!(f, "<function>"),

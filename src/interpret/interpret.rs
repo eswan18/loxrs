@@ -1,4 +1,6 @@
-use crate::ast::{Ast, BinaryOperatorType, Expr, LogicalOperatorType, Stmt, UnaryOperatorType};
+use crate::ast::{
+    Ast, BinaryOperatorType, Expr, LogicalOperatorType, Stmt, UnaryOperatorType, VariableReference,
+};
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::value::LoxValue as V;
@@ -15,6 +17,8 @@ pub struct Interpreter<W: Write> {
     globals: Rc<RefCell<Environment>>,
     // The current variable environment.
     environment: Rc<RefCell<Environment>>,
+    // For each local variable, the distance up the environment stack that we need to go to find it.
+    // locals: HashMap<String, usize>,
 }
 
 impl<W: Write> Interpreter<W> {
@@ -48,7 +52,7 @@ impl<W: Write> Interpreter<W> {
 
     pub fn interpret(&mut self, ast: Ast) -> Result<(), RuntimeError> {
         for stmt in ast {
-            self.eval_stmt(stmt)?;
+            self.eval_stmt(&stmt)?;
         }
         Ok(())
     }
@@ -61,7 +65,7 @@ impl<W: Write> Interpreter<W> {
         self.environment = env;
     }
 
-    pub fn eval_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeError> {
+    pub fn eval_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Print(expr) => {
                 let value = self.eval_expr(expr)?;
@@ -80,13 +84,9 @@ impl<W: Write> Interpreter<W> {
                 self.eval_expr(expr)?;
             }
             Stmt::Function { name, params, body } => {
-                let inner_stmts = match *body {
-                    Stmt::Block(stmts) => stmts,
-                    _ => panic!("Function body must be a block"),
-                };
                 let function = Callable::UserDefined(UserDefinedFunction::new(
-                    params,
-                    inner_stmts,
+                    params.clone(),
+                    body.clone(),
                     self.environment.clone(),
                 ));
                 self.environment
@@ -101,8 +101,8 @@ impl<W: Write> Interpreter<W> {
                 self.environment.borrow_mut().define(&name, value);
             }
             Stmt::While { condition, body } => {
-                while self.eval_expr(condition.clone())?.is_truthy() {
-                    self.eval_stmt(*body.clone())?;
+                while self.eval_expr(condition)?.is_truthy() {
+                    self.eval_stmt(body)?;
                 }
             }
             Stmt::Block(stmts) => {
@@ -125,10 +125,10 @@ impl<W: Write> Interpreter<W> {
             } => {
                 let should_exec = self.eval_expr(condition)?.is_truthy();
                 match should_exec {
-                    true => self.eval_stmt(*then_branch)?,
+                    true => self.eval_stmt(then_branch)?,
                     false => {
                         if let Some(else_branch) = else_branch {
-                            self.eval_stmt(*else_branch)?;
+                            self.eval_stmt(else_branch)?;
                         };
                     }
                 }
@@ -138,18 +138,18 @@ impl<W: Write> Interpreter<W> {
     }
 
     /// Evaluate the given expression and return the result.
-    fn eval_expr(&mut self, expr: Expr) -> Result<V, RuntimeError> {
+    fn eval_expr(&mut self, expr: &Expr) -> Result<V, RuntimeError> {
         let evaluated = match expr {
-            Expr::Literal { value } => V::new_from_literal(value),
-            Expr::Grouping { expression } => self.eval_expr(*expression)?,
+            Expr::Literal { value } => V::new_from_literal(value.clone()),
+            Expr::Grouping { expression } => self.eval_expr(expression)?,
             Expr::Unary { operator, right } => {
-                let right_val = self.eval_expr(*right)?;
+                let right_val = self.eval_expr(right)?;
                 match operator.tp {
                     UnaryOperatorType::Minus => match right_val {
                         V::Number(n) => V::Number(-n),
                         v => {
                             return Err(RuntimeError::UnaryOpTypeError {
-                                operator,
+                                operator: *operator,
                                 operand: v.tp(),
                                 line: operator.line,
                             })
@@ -163,8 +163,8 @@ impl<W: Write> Interpreter<W> {
                 operator,
                 right,
             } => {
-                let left = self.eval_expr(*left)?;
-                let right = self.eval_expr(*right)?;
+                let left = self.eval_expr(left)?;
+                let right = self.eval_expr(right)?;
                 let result = match operator.tp {
                     // Arithmetic and comparison operators that always require two numbers.
                     BinaryOperatorType::Minus
@@ -194,7 +194,7 @@ impl<W: Write> Interpreter<W> {
                             (l, r) => {
                                 // If at least one operator isn't a number, that's invalid.
                                 return Err(RuntimeError::BinaryOpTypeError {
-                                    operator,
+                                    operator: *operator,
                                     left: l.tp(),
                                     right: r.tp(),
                                     line: operator.line,
@@ -208,7 +208,7 @@ impl<W: Write> Interpreter<W> {
                         (V::String(l), V::String(r)) => V::String(format!("{}{}", l, r)),
                         (l, r) => {
                             return Err(RuntimeError::BinaryOpTypeError {
-                                operator,
+                                operator: *operator,
                                 left: l.tp(),
                                 right: r.tp(),
                                 line: operator.line,
@@ -221,7 +221,7 @@ impl<W: Write> Interpreter<W> {
                 result
             }
             Expr::Call { callee, args, line } => {
-                let callee = self.eval_expr(*callee)?;
+                let callee = self.eval_expr(callee)?;
                 let arg_values = args
                     .into_iter()
                     .map(|arg| self.eval_expr(arg))
@@ -237,7 +237,7 @@ impl<W: Write> Interpreter<W> {
                     v => {
                         return Err(RuntimeError::CallableTypeError {
                             uncallable_type: v.tp(),
-                            line,
+                            line: *line,
                         })
                     }
                 };
@@ -246,7 +246,7 @@ impl<W: Write> Interpreter<W> {
                     return Err(RuntimeError::ArityError {
                         expected: callable.arity(),
                         received: arg_values.len(),
-                        line,
+                        line: *line,
                     });
                 }
                 let subinterpreter = Interpreter {
@@ -264,15 +264,10 @@ impl<W: Write> Interpreter<W> {
                     Err(err) => return Err(err),
                 }
             }
-            Expr::Variable { name } => match self.environment.borrow().get(&name) {
-                Some(v) => v,
-                None => return Err(RuntimeError::UndefinedVariable(name)),
-            },
-            Expr::Assignment { name, value } => {
-                let evaluated = self.eval_expr(*value)?;
-                self.environment
-                    .borrow_mut()
-                    .assign(&name, evaluated.clone())?;
+            Expr::Variable(reference) => self.look_up_variable(reference)?,
+            Expr::Assignment { reference, value } => {
+                let evaluated = self.eval_expr(value)?;
+                todo!();
                 evaluated
             }
             Expr::Logical {
@@ -280,20 +275,24 @@ impl<W: Write> Interpreter<W> {
                 right,
                 operator,
             } => {
-                let left_value = self.eval_expr(*left)?;
+                let left_value = self.eval_expr(left)?;
                 match operator.tp {
                     LogicalOperatorType::And => match left_value.is_truthy() {
                         false => left_value,
-                        true => self.eval_expr(*right)?,
+                        true => self.eval_expr(right)?,
                     },
                     LogicalOperatorType::Or => match left_value.is_truthy() {
                         true => left_value,
-                        false => self.eval_expr(*right)?,
+                        false => self.eval_expr(right)?,
                     },
                 }
             }
         };
         Ok(evaluated)
+    }
+
+    fn look_up_variable(&self, reference: &VariableReference) -> Result<V, RuntimeError> {
+        todo!();
     }
 }
 
@@ -318,7 +317,7 @@ mod tests {
             Stmt::Expression(expr) => expr,
             _ => panic!("Expected an expression statement"),
         };
-        interpreter.eval_expr(expr)
+        interpreter.eval_expr(&expr)
     }
 
     /// Interpret one or more statements and collect the printed output into a string.
@@ -825,5 +824,25 @@ mod tests {
     fn fib() {
         let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(2); print fib(8);").unwrap();
         assert_eq!(output, "1\n21\n");
+    }
+
+    #[test]
+    fn scope_bug() {
+        let output = exec_ast(
+            "
+        var a = \"global\";
+        {
+            fun showA() {
+                print a;
+            }
+
+            showA();
+            var a = \"block\";
+            showA();
+        }
+        ",
+        )
+        .unwrap();
+        assert_eq!(output, "global\nglobal\n");
     }
 }

@@ -1,6 +1,7 @@
 use crate::error::LoxError;
 use crate::interpret::Interpreter;
 use crate::parse;
+use crate::resolve::resolve;
 use crate::scan;
 use std::io::Write;
 
@@ -43,6 +44,15 @@ pub fn run_code<W: Write>(code: &str, interpreter: &mut Interpreter<W>) -> Resul
             return Err(LoxError {
                 exit_code: 65,
                 text: err_text,
+            });
+        }
+    };
+    let local_resolutions = match resolve(&ast) {
+        Ok(resolutions) => resolutions,
+        Err(resolve_error) => {
+            return Err(LoxError {
+                exit_code: 65,
+                text: resolve_error.to_string(),
             });
         }
     };

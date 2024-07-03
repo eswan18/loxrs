@@ -7,6 +7,7 @@ mod ast;
 mod error;
 mod interpret;
 mod parse;
+mod resolve;
 mod run;
 mod scan;
 mod token;
