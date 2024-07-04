@@ -89,8 +89,12 @@ impl Callable {
                         .borrow_mut()
                         .define(name, value.clone());
                 }
+                debug!(
+                    "function executing in environment {}",
+                    subinterpreter.get_environment().borrow()
+                );
                 // Then execute the body.
-                subinterpreter.eval_stmt(&Stmt::Block(body.clone()))?;
+                subinterpreter.eval_stmts(body)?;
                 Ok(LoxValue::Nil)
             }
             Callable::Native(f) => (f.function)(subinterpreter.get_environment(), args),

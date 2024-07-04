@@ -3,9 +3,10 @@ use crate::ast::{
 };
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
+use crate::resolve::LocalResolutionMap;
 use crate::value::LoxValue as V;
 use crate::value::{Callable, NativeFunction, UserDefinedFunction};
-use log::{debug, trace};
+use log::debug;
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
@@ -18,11 +19,11 @@ pub struct Interpreter<W: Write> {
     // The current variable environment.
     environment: Rc<RefCell<Environment>>,
     // For each local variable, the distance up the environment stack that we need to go to find it.
-    // locals: HashMap<String, usize>,
+    locals: LocalResolutionMap,
 }
 
 impl<W: Write> Interpreter<W> {
-    pub fn new(writer: W) -> Self {
+    pub fn new(writer: W, locals: LocalResolutionMap) -> Self {
         let mut root_env = Environment::new(None);
 
         // Add our native functions (just this one) to the global environment.
@@ -47,6 +48,7 @@ impl<W: Write> Interpreter<W> {
             writer: Rc::new(RefCell::new(writer)),
             globals: globals.clone(),
             environment: globals.clone(),
+            locals,
         }
     }
 
@@ -63,6 +65,13 @@ impl<W: Write> Interpreter<W> {
 
     pub fn set_environment(&mut self, env: Rc<RefCell<Environment>>) {
         self.environment = env;
+    }
+
+    pub fn eval_stmts(&mut self, stmts: &Vec<Stmt>) -> Result<(), RuntimeError> {
+        for stmt in stmts {
+            self.eval_stmt(&stmt)?;
+        }
+        Ok(())
     }
 
     pub fn eval_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
@@ -99,6 +108,7 @@ impl<W: Write> Interpreter<W> {
                     None => V::Nil,
                 };
                 self.environment.borrow_mut().define(&name, value);
+                debug!("Environment stack:\n{}", self.environment.borrow());
             }
             Stmt::While { condition, body } => {
                 while self.eval_expr(condition)?.is_truthy() {
@@ -113,6 +123,7 @@ impl<W: Write> Interpreter<W> {
                     writer: self.writer.clone(),
                     globals: self.globals.clone(),
                     environment: Rc::new(RefCell::new(new_env)),
+                    locals: self.locals.clone(),
                 };
                 for stmt in stmts {
                     subinterpreter.eval_stmt(stmt)?;
@@ -176,21 +187,18 @@ impl<W: Write> Interpreter<W> {
                     | BinaryOperatorType::LessEqual => {
                         match (left, right) {
                             // If both operands are numbers, return the result.
-                            (V::Number(l), V::Number(r)) => {
-                                trace!("Computing {:?} {} {:?}", l, operator.tp, r);
-                                match operator.tp {
-                                    BinaryOperatorType::Minus => V::Number(l - r),
-                                    BinaryOperatorType::Slash => V::Number(l / r),
-                                    BinaryOperatorType::Star => V::Number(l * r),
-                                    BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
-                                    BinaryOperatorType::Greater => V::Boolean(l > r),
-                                    BinaryOperatorType::LessEqual => V::Boolean(l <= r),
-                                    BinaryOperatorType::Less => V::Boolean(l < r),
-                                    _ => {
-                                        unreachable!("we already matched to one of these operators")
-                                    }
+                            (V::Number(l), V::Number(r)) => match operator.tp {
+                                BinaryOperatorType::Minus => V::Number(l - r),
+                                BinaryOperatorType::Slash => V::Number(l / r),
+                                BinaryOperatorType::Star => V::Number(l * r),
+                                BinaryOperatorType::GreaterEqual => V::Boolean(l >= r),
+                                BinaryOperatorType::Greater => V::Boolean(l > r),
+                                BinaryOperatorType::LessEqual => V::Boolean(l <= r),
+                                BinaryOperatorType::Less => V::Boolean(l < r),
+                                _ => {
+                                    unreachable!("we already matched to one of these operators")
                                 }
-                            }
+                            },
                             (l, r) => {
                                 // If at least one operator isn't a number, that's invalid.
                                 return Err(RuntimeError::BinaryOpTypeError {
@@ -230,10 +238,7 @@ impl<W: Write> Interpreter<W> {
                     .collect::<Result<Vec<V>, RuntimeError>>()?;
                 // Unwrap the callable or throw an error if it's not callable.
                 let callable = match callee {
-                    V::Callable(callable) => {
-                        trace!("Function called with args: {:?}", arg_values[0]);
-                        callable
-                    }
+                    V::Callable(callable) => callable,
                     v => {
                         return Err(RuntimeError::CallableTypeError {
                             uncallable_type: v.tp(),
@@ -253,6 +258,7 @@ impl<W: Write> Interpreter<W> {
                     writer: self.writer.clone(),
                     globals: self.globals.clone(),
                     environment: self.globals.clone(),
+                    locals: self.locals.clone(),
                 };
                 // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
                 match callable.call(subinterpreter, arg_values) {
@@ -267,7 +273,7 @@ impl<W: Write> Interpreter<W> {
             Expr::Variable(reference) => self.look_up_variable(reference)?,
             Expr::Assignment { reference, value } => {
                 let evaluated = self.eval_expr(value)?;
-                todo!();
+                self.assign_variable(reference, evaluated.clone())?;
                 evaluated
             }
             Expr::Logical {
@@ -292,7 +298,61 @@ impl<W: Write> Interpreter<W> {
     }
 
     fn look_up_variable(&self, reference: &VariableReference) -> Result<V, RuntimeError> {
-        todo!();
+        let env = self.get_env_for_variable(reference)?;
+        let env = env.borrow();
+        match env.get(&reference.name) {
+            Some(v) => {
+                debug!("Variable {} resolved to {}", reference.name, v);
+                Ok(v.clone())
+            }
+            None => Err(RuntimeError::UndefinedVariable(reference.name.clone())),
+        }
+    }
+
+    fn assign_variable(&self, reference: &VariableReference, value: V) -> Result<(), RuntimeError> {
+        let env = self.get_env_for_variable(reference)?;
+        env.borrow_mut().assign(&reference.name, value)?;
+        Ok(())
+    }
+
+    /// Get the environment in which a variable reference's definition occurred.
+    /// It's in that environment that the variable value should be looked up or set.
+    fn get_env_for_variable(
+        &self,
+        reference: &VariableReference,
+    ) -> Result<Rc<RefCell<Environment>>, RuntimeError> {
+        // Find the reference in locals to determine how far up the environment stack to go.
+        let depth = match self.locals.depths.get(reference) {
+            Some(d) => *d,
+            None => {
+                // If the variable isn't in the locals mapping, assume (hope?) it's global.
+                let globals = self.globals.borrow();
+                return match globals.get(&reference.name) {
+                    Some(_) => {
+                        debug!(
+                            "Variable {:?} not found in locals, assuming global",
+                            reference
+                        );
+                        return Ok(self.globals.clone());
+                    }
+                    None => Err(RuntimeError::UndefinedVariable(reference.name.clone())),
+                };
+            }
+        };
+        // Get the environment `depth` levels above this one.
+        let mut env = self.environment.clone();
+        for _ in 0..depth {
+            let enclosing_env = env.borrow().enclosing.clone();
+            env = match enclosing_env {
+                Some(env) => env,
+                None => {
+                    return Err(RuntimeError::InternalError(
+                        "Variable reference depth exceeded environment stack".to_string(),
+                    ))
+                }
+            };
+        }
+        Ok(env)
     }
 }
 
@@ -301,6 +361,7 @@ mod tests {
     use super::*;
     use crate::ast::{BinaryOperator, UnaryOperator};
     use crate::parse::parse;
+    use crate::resolve::resolve;
     use crate::scan::scan;
     use crate::value::LoxType;
 
@@ -310,8 +371,9 @@ mod tests {
         let input = format!("{};", input);
         let tokens = scan(input).unwrap();
         let stmts = parse(tokens).unwrap();
+        let locals = resolve(&stmts).unwrap();
         let mock_writer: Vec<u8> = Vec::new();
-        let mut interpreter = Interpreter::new(mock_writer);
+        let mut interpreter = Interpreter::new(mock_writer, locals);
         // We expect the AST to contain a single expression.
         let expr = match stmts[0].clone() {
             Stmt::Expression(expr) => expr,
@@ -324,8 +386,9 @@ mod tests {
     fn exec_ast(input: &str) -> Result<String, RuntimeError> {
         let tokens = scan(input.to_string()).unwrap();
         let ast = parse(tokens).unwrap();
+        let locals = resolve(&ast).unwrap();
         let mock_writer: Vec<u8> = Vec::new();
-        let mut interpreter = Interpreter::new(mock_writer);
+        let mut interpreter = Interpreter::new(mock_writer, locals);
         interpreter.interpret(ast)?;
         let written = String::from_utf8(interpreter.writer.borrow().clone()).unwrap();
         Ok(written)

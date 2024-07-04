@@ -27,6 +27,7 @@ pub enum RuntimeError {
     },
     IOError(std::io::Error),
     UndefinedVariable(String),
+    InternalError(String),
     // A return call isn't an error per se, but using an error lets us elegantly propagate the return value up the stack.
     ReturnCall(LoxValue),
 }
@@ -138,6 +139,7 @@ impl fmt::Display for RuntimeError {
                 write!(f, "Undefined variable '{}'", name)
             }
             RuntimeError::ReturnCall(value) => write!(f, "ReturnCall: {}", value),
+            RuntimeError::InternalError(msg) => write!(f, "InternalError: {}", msg),
         }
     }
 }

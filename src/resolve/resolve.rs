@@ -3,16 +3,16 @@ use crate::resolve::ResolveError;
 use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocalResolutionMap {
     // A mapping of variable to their stack offset.
-    pub locals: HashMap<VariableReference, usize>,
+    pub depths: HashMap<VariableReference, usize>,
 }
 
 impl LocalResolutionMap {
     fn new() -> Self {
         LocalResolutionMap {
-            locals: HashMap::new(),
+            depths: HashMap::new(),
         }
     }
 }
@@ -25,6 +25,7 @@ pub fn resolve(stmts: &Vec<Stmt>) -> Result<LocalResolutionMap, ResolveError> {
         resolutions: LocalResolutionMap::new(),
     };
     resolver.resolve_stmts(stmts)?;
+    info!("Resolved all variables: {:?}", resolver.resolutions);
     Ok(resolver.resolutions)
 }
 
@@ -54,8 +55,8 @@ impl Resolver {
                 self.declare(name);
                 if let Some(expr) = initializer {
                     self.resolve_expr(expr)?;
-                    self.define(name);
                 }
+                self.define(name);
             }
             Stmt::Function { name, params, body } => {
                 self.declare(name);
@@ -189,7 +190,7 @@ impl Resolver {
                     "Resolved variable reference: {:?} referring to declaration {} levels away",
                     reference, distance
                 );
-                self.resolutions.locals.insert(reference, distance);
+                self.resolutions.depths.insert(reference, distance);
                 return;
             }
         }
@@ -212,16 +213,16 @@ mod tests {
         let input = "var y = 0; { print y; { { print y; } } } ";
         let stmts = parse_string(input);
         let resolutions = resolve(&stmts).unwrap();
-        assert_eq!(resolutions.locals.len(), 2);
+        assert_eq!(resolutions.depths.len(), 2);
         // The first y is 1 level below its declaration and the second is 3 levels below.
-        let depths = resolutions.locals.values().collect::<Vec<&usize>>();
+        let depths = resolutions.depths.values().collect::<Vec<&usize>>();
         assert!(depths.contains(&&1));
         assert!(depths.contains(&&3));
     }
 
     #[test]
-    fn catches_references_before_init() {
-        let input = "{ var x; print x; x = 3; }";
+    fn catches_circular_initializer() {
+        let input = "var x = 4; { var x = x + 3; }";
         let stmts = parse_string(input);
         let err = resolve(&stmts).unwrap_err();
         match err {

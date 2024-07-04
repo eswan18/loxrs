@@ -5,7 +5,7 @@ use crate::resolve::resolve;
 use crate::scan;
 use std::io::Write;
 
-pub fn run_code<W: Write>(code: &str, interpreter: &mut Interpreter<W>) -> Result<(), LoxError> {
+pub fn run_code<W: Write>(code: &str, writer: W) -> Result<(), LoxError> {
     let tokens = match scan::scan(code.to_string()) {
         Ok(tokens) => tokens,
         Err(scan_errors) => {
@@ -56,6 +56,7 @@ pub fn run_code<W: Write>(code: &str, interpreter: &mut Interpreter<W>) -> Resul
             });
         }
     };
+    let mut interpreter = Interpreter::new(writer, local_resolutions);
     match interpreter.interpret(ast) {
         Ok(_) => Ok(()),
         Err(runtime_error) => {
