@@ -1,6 +1,6 @@
 use crate::ast::{Expr, Stmt, VariableReference};
 use crate::resolve::ResolveError;
-use log::{debug, error, info, trace, warn};
+use log::{debug, info};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

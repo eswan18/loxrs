@@ -91,33 +91,4 @@ impl Environment {
             None => 0,
         }
     }
-
-    pub fn get_at(&self, distance: usize, name: &str) -> Option<LoxValue> {
-        if distance == 0 {
-            self.get(name)
-        } else {
-            let mut environment = self.enclosing.as_ref().unwrap().borrow();
-            for _ in 0..distance {
-                environment = self.enclosing.as_ref().unwrap().borrow();
-            }
-            environment.get(name)
-        }
-    }
-
-    pub fn assign_at(
-        &mut self,
-        distance: usize,
-        name: &str,
-        value: LoxValue,
-    ) -> Result<(), RuntimeError> {
-        if distance == 0 {
-            self.assign(name, value)
-        } else {
-            let mut environment = self.enclosing.as_ref().unwrap().borrow_mut();
-            for _ in 0..distance {
-                environment = self.enclosing.as_ref().unwrap().borrow_mut();
-            }
-            environment.assign(name, value)
-        }
-    }
 }
