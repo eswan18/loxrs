@@ -4,6 +4,12 @@ use log::{debug, info};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
+pub enum FunctionType {
+    None,
+    Function,
+}
+
+#[derive(Debug, Clone)]
 pub struct LocalResolutionMap {
     // A mapping of variable to their stack offset.
     pub depths: HashMap<VariableReference, usize>,
@@ -23,6 +29,7 @@ pub fn resolve(stmts: &Vec<Stmt>) -> Result<LocalResolutionMap, ResolveError> {
     let mut resolver = Resolver {
         scopes: vec![HashMap::new()],
         resolutions: LocalResolutionMap::new(),
+        current_function: FunctionType::None,
     };
     resolver.resolve_stmts(stmts)?;
     info!("Resolved all variables: {:?}", resolver.resolutions);
@@ -34,6 +41,8 @@ pub struct Resolver {
     scopes: Vec<HashMap<String, bool>>,
     // The local variable stack.
     resolutions: LocalResolutionMap,
+    // Whether we're in a function.
+    current_function: FunctionType,
 }
 
 impl Resolver {
@@ -52,16 +61,16 @@ impl Resolver {
                 self.end_scope()?;
             }
             Stmt::Var { name, initializer } => {
-                self.declare(name);
+                self.declare(name)?;
                 if let Some(expr) = initializer {
                     self.resolve_expr(expr)?;
                 }
                 self.define(name);
             }
             Stmt::Function { name, params, body } => {
-                self.declare(name);
+                self.declare(name)?;
                 self.define(name);
-                self.resolve_function(params, body)?;
+                self.resolve_function(FunctionType::Function, params, body)?;
             }
             Stmt::Expression(expr) => {
                 self.resolve_expr(expr)?;
@@ -81,6 +90,9 @@ impl Resolver {
                 self.resolve_expr(expr)?;
             }
             Stmt::Return(value) => {
+                if let FunctionType::None = self.current_function {
+                    return Err(ResolveError::InvalidReturn);
+                }
                 if let Some(value) = value {
                     self.resolve_expr(value)?;
                 }
@@ -95,25 +107,36 @@ impl Resolver {
 
     fn resolve_function(
         &mut self,
+        function_type: FunctionType,
         params: &Vec<String>,
         body: &Vec<Stmt>,
     ) -> Result<(), ResolveError> {
+        // Update the current function type.
+        let enclosing_function = self.current_function.clone();
+        self.current_function = function_type;
+        // Resolve the function body in a new scope.
         self.begin_scope();
         for param in params {
-            self.declare(&param);
+            self.declare(&param)?;
             self.define(&param);
         }
         self.resolve_stmts(body)?;
         self.end_scope()?;
+        // Restore the previous function type.
+        self.current_function = enclosing_function;
         Ok(())
     }
 
-    fn declare(&mut self, name: &str) {
+    fn declare(&mut self, name: &str) -> Result<(), ResolveError> {
         // If we have no scopes active, then this must be a global variable and we'll deal with it elsewhere.
         if let Some(current_scope) = self.scopes.last_mut() {
             // Set value to false to indicate that the variable hasn't been initialized.
-            current_scope.insert(name.to_string(), false);
+            if current_scope.insert(name.to_string(), false).is_some() {
+                // Error if the variable was already declared.
+                return Err(ResolveError::Redeclaration(name.to_string()));
+            }
         }
+        Ok(())
     }
 
     fn define(&mut self, name: &str) {
@@ -145,7 +168,7 @@ impl Resolver {
                     .last()
                     .is_some_and(|scope| scope.get(&reference.name) == Some(&false))
                 {
-                    return Err(ResolveError::ReadVarBeforeInitialize(reference.clone()));
+                    return Err(ResolveError::ReadBeforeInitialize(reference.clone()));
                 }
                 self.resolve_reference(reference.clone());
             }
@@ -221,15 +244,40 @@ mod tests {
     }
 
     #[test]
-    fn catches_circular_initializer() {
+    fn errros_on_circular_initializer() {
         let input = "var x = 4; { var x = x + 3; }";
         let stmts = parse_string(input);
         let err = resolve(&stmts).unwrap_err();
         match err {
-            ResolveError::ReadVarBeforeInitialize(VariableReference { name, .. }) => {
+            ResolveError::ReadBeforeInitialize(VariableReference { name, .. }) => {
                 assert_eq!(name, "x")
             }
             _ => panic!("Expected ReadVarBeforeInitialize error"),
+        }
+    }
+
+    #[test]
+    fn errors_on_redeclaration_of_locals() {
+        let input = "fun bad() {
+            var a = 1;
+            var a = 2;
+        }";
+        let stmts = parse_string(input);
+        let err = resolve(&stmts).unwrap_err();
+        match err {
+            ResolveError::Redeclaration(_) => {}
+            _ => panic!("Expected Redeclaration error"),
+        }
+    }
+
+    #[test]
+    fn errors_on_return_outside_of_function() {
+        let input = "return 1;";
+        let stmts = parse_string(input);
+        let err = resolve(&stmts).unwrap_err();
+        match err {
+            ResolveError::InvalidReturn => {}
+            _ => panic!("Expected InvalidReturn error"),
         }
     }
 }
