@@ -60,6 +60,10 @@ impl Resolver {
                 self.resolve_stmts(stmts)?;
                 self.end_scope()?;
             }
+            Stmt::Class { name, methods } => {
+                self.declare(name)?;
+                self.define(name);
+            }
             Stmt::Var { name, initializer } => {
                 self.declare(name)?;
                 if let Some(expr) = initializer {

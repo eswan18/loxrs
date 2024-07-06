@@ -5,7 +5,7 @@ use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::resolve::LocalResolutionMap;
 use crate::value::LoxValue as V;
-use crate::value::{Callable, NativeFunction, UserDefinedFunction};
+use crate::value::{Callable, Class, NativeFunction, UserDefinedFunction};
 use log::debug;
 use std::cell::RefCell;
 use std::io::Write;
@@ -129,6 +129,14 @@ impl<W: Write> Interpreter<W> {
                     subinterpreter.eval_stmt(stmt)?;
                 }
             }
+            Stmt::Class { name, methods } => {
+                // Initially define as nil to allow recursive references.
+                self.environment.borrow_mut().define(&name, V::Nil);
+                // Build a LoxClass.
+                let class = V::Class(Class { name: name.clone() });
+                // Assign the new class to the name in the environment.
+                self.environment.borrow_mut().assign(&name, class)?;
+            }
             Stmt::If {
                 condition,
                 then_branch,
@@ -237,37 +245,44 @@ impl<W: Write> Interpreter<W> {
                     .into_iter()
                     .collect::<Result<Vec<V>, RuntimeError>>()?;
                 // Unwrap the callable or throw an error if it's not callable.
-                let callable = match callee {
-                    V::Callable(callable) => callable,
+                match callee {
+                    V::Callable(callable) => {
+                        // Arity check
+                        if arg_values.len() != callable.arity() {
+                            return Err(RuntimeError::ArityError {
+                                expected: callable.arity(),
+                                received: arg_values.len(),
+                                line: *line,
+                            });
+                        }
+                        // Call it and return the result.
+                        let subinterpreter = Interpreter {
+                            writer: self.writer.clone(),
+                            globals: self.globals.clone(),
+                            environment: self.globals.clone(),
+                            locals: self.locals.clone(),
+                        };
+                        // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
+                        match callable.call(subinterpreter, arg_values) {
+                            Ok(v) => v,
+                            Err(RuntimeError::ReturnCall(v)) => {
+                                debug!("catching return call: {:?}", v);
+                                v
+                            }
+                            Err(err) => return Err(err),
+                        }
+                    }
+                    V::Class(class) => {
+                        // No need for arity check; classes never take arguments.
+                        // Just create a new instance and return it.
+                        class.new_instance()
+                    }
                     v => {
                         return Err(RuntimeError::CallableTypeError {
                             uncallable_type: v.tp(),
                             line: *line,
                         })
                     }
-                };
-                // Call it and return the result.
-                if arg_values.len() != callable.arity() {
-                    return Err(RuntimeError::ArityError {
-                        expected: callable.arity(),
-                        received: arg_values.len(),
-                        line: *line,
-                    });
-                }
-                let subinterpreter = Interpreter {
-                    writer: self.writer.clone(),
-                    globals: self.globals.clone(),
-                    environment: self.globals.clone(),
-                    locals: self.locals.clone(),
-                };
-                // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
-                match callable.call(subinterpreter, arg_values) {
-                    Ok(v) => v,
-                    Err(RuntimeError::ReturnCall(v)) => {
-                        debug!("catching return call: {:?}", v);
-                        v
-                    }
-                    Err(err) => return Err(err),
                 }
             }
             Expr::Variable(reference) => self.look_up_variable(reference)?,
@@ -890,7 +905,7 @@ mod tests {
     }
 
     #[test]
-    fn scope_bug() {
+    fn book_example_scope_bug() {
         let output = exec_ast(
             "
         var a = \"global\";
@@ -907,5 +922,18 @@ mod tests {
         )
         .unwrap();
         assert_eq!(output, "global\nglobal\n");
+    }
+
+    #[test]
+    fn allows_class_declaration() {
+        exec_ast(
+            "
+        class Foo {
+            bar() {
+                print \"bar\";
+            }
+        }",
+        )
+        .unwrap();
     }
 }

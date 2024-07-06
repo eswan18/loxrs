@@ -22,6 +22,10 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
     Block(Vec<Stmt>),
+    Class {
+        name: String,
+        methods: Vec<Stmt>,
+    },
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
@@ -61,6 +65,13 @@ impl Display for Stmt {
                 write!(f, "{{\n")?;
                 for stmt in stmts {
                     write!(f, "{}\n", stmt)?;
+                }
+                write!(f, "}}")
+            }
+            Stmt::Class { name, methods } => {
+                write!(f, "class {} {{\n", name)?;
+                for method in methods {
+                    write!(f, "{}\n", method)?;
                 }
                 write!(f, "}}")
             }

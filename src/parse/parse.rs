@@ -4,7 +4,7 @@ use crate::ast::{
 };
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
-use log::{debug, error, trace};
+use log::{debug, error, info, trace};
 
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, Vec<ParseError>> {
     let mut parser = Parser::new(tokens);
@@ -22,6 +22,7 @@ impl Parser {
     }
 
     fn parse(&mut self) -> Result<Vec<Stmt>, Vec<ParseError>> {
+        info!("Beginning parse");
         let mut stmts: Vec<Stmt> = Vec::new();
         let mut errors: Vec<ParseError> = Vec::new();
         while !self.is_at_end() {
@@ -45,7 +46,10 @@ impl Parser {
 
     /// Parse any statement that declares something -- a function or a variable.
     fn parse_declaration(&mut self) -> Result<Stmt, ParseError> {
-        if self.advance_on_match(&[TokenType::Fun]).is_some() {
+        debug!("Entering parse_declaration");
+        if self.check_current_token_type(&[TokenType::Class]) {
+            self.parse_class_declaration()
+        } else if self.advance_on_match(&[TokenType::Fun]).is_some() {
             self.parse_fun_declaration(false)
         } else if self.check_current_token_type(&[TokenType::Var]) {
             self.parse_var_declaration()
@@ -54,8 +58,51 @@ impl Parser {
         }
     }
 
+    /// Parse a class declaration.
+    fn parse_class_declaration(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_class_declaration");
+        // Consume the 'class' token.
+        let line = match self.advance_on_match(&[TokenType::Class]) {
+            Some(t) => t.line,
+            None => {
+                return Err(ParseError::ExpectedToken {
+                    token: TokenType::Class,
+                    line: self.peek().unwrap().line,
+                });
+            }
+        };
+        // Consume the class name.
+        let name = match self.advance_on_match(&[TokenType::Identifier]) {
+            Some(t) => t.lexeme.clone(),
+            None => {
+                return Err(ParseError::ExpectedIdentifier {
+                    line,
+                    entity: String::from("class name"),
+                });
+            }
+        };
+        // Consume the left brace.
+        if self.advance_on_match(&[TokenType::LeftBrace]).is_none() {
+            return Err(ParseError::ExpectedLeftBrace { line });
+        }
+        // Parse the class body.
+        let mut methods: Vec<Stmt> = Vec::new();
+        while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {
+            match self.parse_fun_declaration(true) {
+                Ok(stmt) => methods.push(stmt),
+                Err(err) => return Err(err),
+            }
+        }
+        // Consume the right brace.
+        if self.advance_on_match(&[TokenType::RightBrace]).is_none() {
+            return Err(ParseError::ExpectedRightBrace { line });
+        }
+        Ok(Stmt::Class { name, methods })
+    }
+
     /// Parse a function declaration.
     fn parse_fun_declaration(&mut self, is_method: bool) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_fun_declaration");
         // Set some variables that we'll use for diagnostic error messages.
         let line = self.peek().unwrap().line;
         let entity = match is_method {
@@ -126,6 +173,7 @@ impl Parser {
 
     /// Parse a variable declaration.
     fn parse_var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_var_declaration");
         // Consume the 'var' token.
         let line = match self.advance_on_match(&[TokenType::Var]) {
             Some(t) => t.line,
@@ -162,6 +210,7 @@ impl Parser {
 
     /// Parse a while statement.
     fn parse_while_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_while_statement");
         // Consume the while token.
         let line = match self.advance_on_match(&[TokenType::While]) {
             Some(t) => t.line,
@@ -187,6 +236,7 @@ impl Parser {
 
     /// Parse any non-declaration statement.
     fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_statement");
         if self.check_current_token_type(&[TokenType::For]) {
             self.parse_for_statement()
         } else if self.check_current_token_type(&[TokenType::If]) {
@@ -206,6 +256,7 @@ impl Parser {
 
     /// Parse a for statement.
     fn parse_for_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_for_statement");
         // Consume the `for` token.
         let line = match self.advance_on_match(&[TokenType::For]) {
             Some(t) => t.line,
@@ -273,6 +324,7 @@ impl Parser {
     }
 
     fn parse_if_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_if_statement");
         // Consume the 'if' token.
         let line = match self.advance_on_match(&[TokenType::If]) {
             Some(t) => t.line,
@@ -310,6 +362,7 @@ impl Parser {
 
     /// Parse a print statement.
     fn parse_print_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_print_statement");
         // Consume the print token.
         let line = match self.advance_on_match(&[TokenType::Print]) {
             Some(t) => t.line,
@@ -328,6 +381,7 @@ impl Parser {
     }
 
     fn parse_return_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_return_statement");
         // Consume the return token.
         let line = match self.advance_on_match(&[TokenType::Return]) {
             Some(t) => t.line,
@@ -350,6 +404,7 @@ impl Parser {
 
     /// Parse an expression statement.
     fn parse_expression_statement(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_expression_statement");
         let expr = self.parse_expression()?;
         let line = self.peek().unwrap().line;
         match self.advance_on_match(&[TokenType::Semicolon]) {
@@ -360,6 +415,7 @@ impl Parser {
 
     /// Parse a block of statements.
     fn parse_block(&mut self) -> Result<Stmt, ParseError> {
+        debug!("Entering parse_block");
         // Consume the left brace.
         if self.advance_on_match(&[TokenType::LeftBrace]).is_none() {
             return Err(ParseError::ExpectedLeftBrace {
@@ -1258,6 +1314,45 @@ mod tests {
                 _ => panic!("The initializer should be a binary expression"),
             },
             _ => panic!("The only top-level statement should be a variable declaration"),
+        }
+    }
+
+    #[test]
+    fn bare_class_definition() {
+        let input = "class A {}";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt = &stmts[0];
+        match stmt {
+            Stmt::Class { name, methods, .. } => {
+                assert_eq!(name, "A");
+                assert_eq!(methods.len(), 0);
+            }
+            _ => panic!("The only top-level statement should be a class declaration"),
+        }
+    }
+
+    #[test]
+    fn class_with_methods() {
+        let input = "class A { a() { print 123; } }";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt = &stmts[0];
+        match stmt {
+            Stmt::Class { name, methods, .. } => {
+                assert_eq!(name, "A");
+                assert_eq!(methods.len(), 1);
+                let method = &methods[0];
+                match method {
+                    Stmt::Function { name, .. } => {
+                        assert_eq!(name, "a");
+                    }
+                    _ => panic!("The method should be a function declaration"),
+                }
+            }
+            _ => panic!("The only top-level statement should be a class declaration"),
         }
     }
 }
