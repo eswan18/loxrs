@@ -648,6 +648,20 @@ impl Parser {
                     args,
                     line,
                 };
+            } else if let Some(token) = self.advance_on_match(&[TokenType::Dot]) {
+                // "Get" expressions
+                let line = token.line;
+                let object = Box::new(expr);
+                let name = match self.advance_on_match(&[TokenType::Identifier]) {
+                    Some(t) => t.lexeme.clone(),
+                    None => {
+                        return Err(ParseError::ExpectedIdentifier {
+                            line,
+                            entity: String::from("property name"),
+                        });
+                    }
+                };
+                expr = Expr::Get { object, name }
             } else {
                 break;
             }
@@ -1335,7 +1349,7 @@ mod tests {
 
     #[test]
     fn class_with_methods() {
-        let input = "class A { a() { print 123; } }";
+        let input = "class A { a(abc, def) { print 123; } }";
         let tokens = scan(input.to_string()).unwrap();
         let stmts = parse(tokens).unwrap();
         assert_eq!(stmts.len(), 1);
@@ -1346,13 +1360,32 @@ mod tests {
                 assert_eq!(methods.len(), 1);
                 let method = &methods[0];
                 match method {
-                    Stmt::Function { name, .. } => {
+                    Stmt::Function { name, params, body } => {
+                        assert_eq!(params, &["abc", "def"]);
                         assert_eq!(name, "a");
+                        assert_eq!(body.len(), 1);
                     }
                     _ => panic!("The method should be a function declaration"),
                 }
             }
             _ => panic!("The only top-level statement should be a class declaration"),
+        }
+    }
+
+    #[test]
+    fn get_property() {
+        let input = "abc.def";
+        let tokens = scan(input.to_string()).unwrap();
+        let expr = Parser::new(tokens).parse_expression().unwrap();
+        match expr {
+            Expr::Get { object, name } => {
+                assert_eq!(name, "def");
+                match *object {
+                    Expr::Variable(var_ref) if var_ref.name == "abc" => (),
+                    _ => panic!("object should be a variable."),
+                }
+            }
+            _ => panic!("Expr should be a Get"),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::value::Class;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LoxType {
     Number,
     String,

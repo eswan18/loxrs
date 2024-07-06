@@ -1,4 +1,5 @@
 use crate::ast::{Expr, Stmt, VariableReference};
+use crate::interpret::RuntimeError;
 use crate::resolve::ResolveError;
 use log::{debug, info};
 use std::collections::HashMap;
@@ -189,6 +190,9 @@ impl Resolver {
                 for arg in args {
                     self.resolve_expr(arg)?;
                 }
+            }
+            Expr::Get { object, .. } => {
+                self.resolve_expr(object)?;
             }
             Expr::Grouping { expression } => {
                 self.resolve_expr(expression)?;

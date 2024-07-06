@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::ast::LiteralValue;
-use crate::value::{Callable, Class, LoxType};
+use crate::value::{Callable, Class, Instance, LoxType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoxValue {
@@ -10,7 +10,7 @@ pub enum LoxValue {
     Boolean(bool),
     Callable(Callable),
     Class(Class),
-    Instance { class: Class },
+    Instance(Instance),
     Nil,
 }
 
@@ -41,7 +41,7 @@ impl LoxValue {
             LoxValue::Boolean(_) => LoxType::Boolean,
             LoxValue::Callable(_) => LoxType::Callable,
             LoxValue::Class(_) => LoxType::Class,
-            LoxValue::Instance { class } => LoxType::Instance(class.clone()),
+            LoxValue::Instance(Instance { class, .. }) => LoxType::Instance(class.clone()),
             LoxValue::Nil => LoxType::Nil,
         }
     }
@@ -56,7 +56,7 @@ impl fmt::Display for LoxValue {
             LoxValue::Callable(Callable::Native(_)) => write!(f, "<native-function>"),
             LoxValue::Callable(Callable::UserDefined(_)) => write!(f, "<function>"),
             LoxValue::Class(Class { name }) => write!(f, "<class {}>", name),
-            LoxValue::Instance { class } => write!(f, "<{} instance>", class.name),
+            LoxValue::Instance(Instance { class, .. }) => write!(f, "<{} instance>", class.name),
             LoxValue::Nil => write!(f, "nil"),
         }
     }

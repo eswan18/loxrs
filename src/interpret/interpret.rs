@@ -285,6 +285,24 @@ impl<W: Write> Interpreter<W> {
                     }
                 }
             }
+            Expr::Get { object, name } => {
+                let object = self.eval_expr(object)?;
+                let instance = match object {
+                    V::Instance(instance) => instance,
+                    _ => {
+                        return Err(RuntimeError::PropertyAccessTypeError {
+                            tp: object.tp(),
+                            property: name.to_string(),
+                        });
+                    }
+                };
+                match instance.get(name) {
+                    Some(v) => v.clone(),
+                    None => {
+                        return Err(RuntimeError::UndefinedProperty(name.clone()));
+                    }
+                }
+            }
             Expr::Variable(reference) => self.look_up_variable(reference)?,
             Expr::Assignment { reference, value } => {
                 let evaluated = self.eval_expr(value)?;

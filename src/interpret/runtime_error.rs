@@ -5,6 +5,7 @@ use crate::value::{LoxType, LoxValue};
 
 #[derive(Debug)]
 pub enum RuntimeError {
+    // Type errors
     UnaryOpTypeError {
         operator: UnaryOperator,
         operand: LoxType,
@@ -20,13 +21,21 @@ pub enum RuntimeError {
         uncallable_type: LoxType,
         line: u32,
     },
+    PropertyAccessTypeError {
+        property: String,
+        tp: LoxType,
+    },
     ArityError {
         expected: usize,
         received: usize,
         line: u32,
     },
-    IOError(std::io::Error),
+    // Access errors
     UndefinedVariable(String),
+    UndefinedProperty(String),
+    // Problems with using the writer.
+    IOError(std::io::Error),
+    // Something genuinely unexpected (a bug, probably).
     InternalError(String),
     // A return call isn't an error per se, but using an error lets us elegantly propagate the return value up the stack.
     ReturnCall(LoxValue),
@@ -126,6 +135,9 @@ impl fmt::Display for RuntimeError {
                 let err_msg = format!("Type {} is not callable", uncallable_type);
                 write!(f, "CallableTypeError [line {}]: {}", line, err_msg)
             }
+            RuntimeError::PropertyAccessTypeError { property, tp } => {
+                write!(f, "Cannot accesss property \"{}\" on type {}", property, tp)
+            }
             RuntimeError::ArityError {
                 expected,
                 received,
@@ -137,6 +149,9 @@ impl fmt::Display for RuntimeError {
             RuntimeError::IOError(err) => write!(f, "IOError: {}", err),
             RuntimeError::UndefinedVariable(name) => {
                 write!(f, "Undefined variable '{}'", name)
+            }
+            RuntimeError::UndefinedProperty(name) => {
+                write!(f, "Undefined property '{}'", name)
             }
             RuntimeError::ReturnCall(value) => write!(f, "ReturnCall: {}", value),
             RuntimeError::InternalError(msg) => write!(f, "InternalError: {}", msg),

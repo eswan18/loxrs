@@ -28,6 +28,10 @@ pub enum Expr {
         args: Vec<Expr>,
         line: u32,
     },
+    Get {
+        object: Box<Expr>,
+        name: String,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -79,6 +83,9 @@ impl Display for Expr {
                     .collect::<Vec<String>>()
                     .join(", ");
                 write!(f, "{}({})", callee, args)
+            }
+            Expr::Get { object, name } => {
+                write!(f, "{}.{}", object, name)
             }
             Expr::Grouping { expression } => {
                 write!(f, "({})", expression)
