@@ -1,7 +1,11 @@
 class Foo {}
-
-print Foo;
-
 var x = Foo();
 
-print x;
+
+print "setting r";
+x.r = 4;
+print "...done";
+
+print "getting r";
+print x.r;
+print "...done";

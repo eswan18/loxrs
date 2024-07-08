@@ -55,19 +55,10 @@ impl Environment {
     }
 
     /// Get the value of a variable if it's set.
-    /// Returns a copy of the value, not a reference to the original.
-    // Note to future self: Copying here might become an issue, because `x = MyObj(); y = ex; y.prop = 5;` seems like it should modify x, not a copy of it.
-    pub fn get(&self, name: &str) -> Option<LoxValue> {
+    pub fn get(self, name: &str) -> Option<&mut LoxValue> {
         match self.values.get(name) {
-            Some(value) => Some(value.clone()),
-            None => {
-                if let Some(enclosing) = &self.enclosing {
-                    if let Some(value) = enclosing.borrow().get(name) {
-                        return Some(value.clone());
-                    };
-                };
-                None
-            }
+            Some(mut value) => Some(&mut value),
+            None => None,
         }
     }
 

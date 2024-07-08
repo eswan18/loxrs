@@ -194,6 +194,10 @@ impl Resolver {
             Expr::Get { object, .. } => {
                 self.resolve_expr(object)?;
             }
+            Expr::Set { object, value, .. } => {
+                self.resolve_expr(object)?;
+                self.resolve_expr(value)?;
+            }
             Expr::Grouping { expression } => {
                 self.resolve_expr(expression)?;
             }

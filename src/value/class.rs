@@ -20,7 +20,7 @@ impl Class {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instance {
     pub class: Class,
-    fields: HashMap<String, LoxValue>,
+    pub fields: HashMap<String, LoxValue>,
 }
 
 impl Instance {

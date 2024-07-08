@@ -32,6 +32,11 @@ pub enum Expr {
         object: Box<Expr>,
         name: String,
     },
+    Set {
+        object: Box<Expr>,
+        name: String,
+        value: Box<Expr>,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -86,6 +91,13 @@ impl Display for Expr {
             }
             Expr::Get { object, name } => {
                 write!(f, "{}.{}", object, name)
+            }
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                write!(f, "{}.{} = {}", object, name, value)
             }
             Expr::Grouping { expression } => {
                 write!(f, "({})", expression)

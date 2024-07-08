@@ -453,6 +453,11 @@ impl Parser {
                     reference,
                     value: Box::new(value),
                 }),
+                Expr::Get { object, name } => Ok(Expr::Set {
+                    object,
+                    name,
+                    value: Box::new(value),
+                }),
                 _ => Err(ParseError::InvalidAssignmentTarget { line, expr }),
             };
         }
@@ -1373,7 +1378,7 @@ mod tests {
     }
 
     #[test]
-    fn get_property() {
+    fn get_field() {
         let input = "abc.def";
         let tokens = scan(input.to_string()).unwrap();
         let expr = Parser::new(tokens).parse_expression().unwrap();

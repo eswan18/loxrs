@@ -303,6 +303,26 @@ impl<W: Write> Interpreter<W> {
                     }
                 }
             }
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                let object = self.eval_expr(object)?;
+                let mut instance = match object {
+                    V::Instance(instance) => instance,
+                    object => {
+                        return Err(RuntimeError::PropertyAccessTypeError {
+                            property: name.to_string(),
+                            tp: object.tp(),
+                        })
+                    }
+                };
+                let value = self.eval_expr(value)?;
+                instance.set(name.to_string(), value.clone());
+                debug!("updated instance, new fields {:?}", instance.fields);
+                value
+            }
             Expr::Variable(reference) => self.look_up_variable(reference)?,
             Expr::Assignment { reference, value } => {
                 let evaluated = self.eval_expr(value)?;
@@ -330,13 +350,13 @@ impl<W: Write> Interpreter<W> {
         Ok(evaluated)
     }
 
-    fn look_up_variable(&self, reference: &VariableReference) -> Result<V, RuntimeError> {
+    fn look_up_variable(&self, reference: &VariableReference) -> Result<&mut V, RuntimeError> {
         let env = self.get_env_for_variable(reference)?;
-        let env = env.borrow();
+        let env = env.borrow_mut();
         match env.get(&reference.name) {
             Some(v) => {
                 debug!("Variable {} resolved to {}", reference.name, v);
-                Ok(v.clone())
+                Ok(v)
             }
             None => Err(RuntimeError::UndefinedVariable(reference.name.clone())),
         }
