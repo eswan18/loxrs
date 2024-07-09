@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::value::LoxValue;
 
@@ -20,15 +22,15 @@ impl Class {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instance {
     pub class: Class,
-    pub fields: HashMap<String, LoxValue>,
+    pub fields: HashMap<String, Rc<RefCell<LoxValue>>>,
 }
 
 impl Instance {
-    pub fn get(&self, name: &str) -> Option<&LoxValue> {
-        self.fields.get(name)
+    pub fn get(&self, name: &str) -> Option<Rc<RefCell<LoxValue>>> {
+        self.fields.get(name).cloned()
     }
 
     pub fn set(&mut self, name: String, value: LoxValue) {
-        self.fields.insert(name, value);
+        self.fields.insert(name, Rc::new(RefCell::new(value)));
     }
 }

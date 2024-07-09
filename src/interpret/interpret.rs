@@ -78,13 +78,13 @@ impl<W: Write> Interpreter<W> {
         match stmt {
             Stmt::Print(expr) => {
                 let value = self.eval_expr(expr)?;
-                writeln!(self.writer.borrow_mut(), "{}", value)
+                writeln!(self.writer.borrow_mut(), "{}", value.borrow())
                     .map_err(|io_err| RuntimeError::IOError(io_err))?;
             }
             Stmt::Return(expr) => {
                 let return_val = match expr {
-                    None => V::Nil,
-                    Some(expr) => self.eval_expr(expr)?,
+                    None => Rc::new(RefCell::new(V::Nil)),
+                    Some(expr) => self.eval_expr(expr)?.clone(),
                 };
                 debug!("return statement encountered with value {:?}", return_val);
                 return Err(RuntimeError::ReturnCall(return_val));
@@ -104,14 +104,14 @@ impl<W: Write> Interpreter<W> {
             }
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
-                    Some(expr) => self.eval_expr(expr)?,
+                    Some(expr) => self.eval_expr(expr)?.borrow().clone(),
                     None => V::Nil,
                 };
                 self.environment.borrow_mut().define(&name, value);
                 debug!("Environment stack:\n{}", self.environment.borrow());
             }
             Stmt::While { condition, body } => {
-                while self.eval_expr(condition)?.is_truthy() {
+                while self.eval_expr(condition)?.borrow().is_truthy() {
                     self.eval_stmt(body)?;
                 }
             }
@@ -142,7 +142,7 @@ impl<W: Write> Interpreter<W> {
                 then_branch,
                 else_branch,
             } => {
-                let should_exec = self.eval_expr(condition)?.is_truthy();
+                let should_exec = self.eval_expr(condition)?.borrow().is_truthy();
                 match should_exec {
                     true => self.eval_stmt(then_branch)?,
                     false => {
@@ -157,13 +157,17 @@ impl<W: Write> Interpreter<W> {
     }
 
     /// Evaluate the given expression and return the result.
-    fn eval_expr(&mut self, expr: &Expr) -> Result<V, RuntimeError> {
-        let evaluated = match expr {
-            Expr::Literal { value } => V::new_from_literal(value.clone()),
+    fn eval_expr(&mut self, expr: &Expr) -> Result<Rc<RefCell<V>>, RuntimeError> {
+        let evaluated: Rc<RefCell<V>> = match expr {
+            Expr::Literal { value } => {
+                let literal = V::new_from_literal(value.clone());
+                Rc::new(RefCell::new(literal))
+            }
             Expr::Grouping { expression } => self.eval_expr(expression)?,
             Expr::Unary { operator, right } => {
                 let right_val = self.eval_expr(right)?;
-                match operator.tp {
+                let right_val = right_val.borrow().clone();
+                let evaluated = match operator.tp {
                     UnaryOperatorType::Minus => match right_val {
                         V::Number(n) => V::Number(-n),
                         v => {
@@ -171,19 +175,20 @@ impl<W: Write> Interpreter<W> {
                                 operator: *operator,
                                 operand: v.tp(),
                                 line: operator.line,
-                            })
+                            });
                         }
                     },
                     UnaryOperatorType::Bang { .. } => V::Boolean(!right_val.is_truthy()),
-                }
+                };
+                Rc::new(RefCell::new(evaluated))
             }
             Expr::Binary {
                 left,
                 operator,
                 right,
             } => {
-                let left = self.eval_expr(left)?;
-                let right = self.eval_expr(right)?;
+                let left = self.eval_expr(left)?.borrow().clone();
+                let right = self.eval_expr(right)?.borrow().clone();
                 let result = match operator.tp {
                     // Arithmetic and comparison operators that always require two numbers.
                     BinaryOperatorType::Minus
@@ -234,24 +239,24 @@ impl<W: Write> Interpreter<W> {
                     BinaryOperatorType::BangEqual => V::Boolean(left != right),
                     BinaryOperatorType::EqualEqual => V::Boolean(left == right),
                 };
-                result
+                Rc::new(RefCell::new(result))
             }
             Expr::Call { callee, args, line } => {
                 let callee = self.eval_expr(callee)?;
-                let arg_values = args
+                let callee = callee.borrow();
+                // Evaluate and clone the args.
+                let evaluted_args: Vec<V> = args
                     .into_iter()
-                    .map(|arg| self.eval_expr(arg))
-                    .collect::<Vec<_>>()
-                    .into_iter()
+                    .map(|arg| self.eval_expr(arg).map(|v| v.borrow().clone()))
                     .collect::<Result<Vec<V>, RuntimeError>>()?;
                 // Unwrap the callable or throw an error if it's not callable.
-                match callee {
+                let returned = match & *callee {
                     V::Callable(callable) => {
                         // Arity check
-                        if arg_values.len() != callable.arity() {
+                        if evaluted_args.len() != callable.arity() {
                             return Err(RuntimeError::ArityError {
                                 expected: callable.arity(),
-                                received: arg_values.len(),
+                                received: evaluted_args.len(),
                                 line: *line,
                             });
                         }
@@ -263,11 +268,11 @@ impl<W: Write> Interpreter<W> {
                             locals: self.locals.clone(),
                         };
                         // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
-                        match callable.call(subinterpreter, arg_values) {
+                        match callable.call(subinterpreter, evaluted_args) {
                             Ok(v) => v,
                             Err(RuntimeError::ReturnCall(v)) => {
                                 debug!("catching return call: {:?}", v);
-                                v
+                                v.borrow().clone()
                             }
                             Err(err) => return Err(err),
                         }
@@ -283,11 +288,13 @@ impl<W: Write> Interpreter<W> {
                             line: *line,
                         })
                     }
-                }
+                };
+                Rc::new(RefCell::new(returned))
             }
             Expr::Get { object, name } => {
                 let object = self.eval_expr(object)?;
-                let instance = match object {
+                let object = object.borrow();
+                let instance = match & *object {
                     V::Instance(instance) => instance,
                     _ => {
                         return Err(RuntimeError::PropertyAccessTypeError {
@@ -309,7 +316,8 @@ impl<W: Write> Interpreter<W> {
                 value,
             } => {
                 let object = self.eval_expr(object)?;
-                let mut instance = match object {
+                let mut object = object.borrow_mut();
+                let instance = match &mut *object {
                     V::Instance(instance) => instance,
                     object => {
                         return Err(RuntimeError::PropertyAccessTypeError {
@@ -319,14 +327,14 @@ impl<W: Write> Interpreter<W> {
                     }
                 };
                 let value = self.eval_expr(value)?;
-                instance.set(name.to_string(), value.clone());
+                instance.set(name.to_string(), value.borrow().clone());
                 debug!("updated instance, new fields {:?}", instance.fields);
-                value
+                value.clone()
             }
             Expr::Variable(reference) => self.look_up_variable(reference)?,
             Expr::Assignment { reference, value } => {
                 let evaluated = self.eval_expr(value)?;
-                self.assign_variable(reference, evaluated.clone())?;
+                self.assign_variable(reference, evaluated.borrow().clone())?;
                 evaluated
             }
             Expr::Logical {
@@ -336,12 +344,12 @@ impl<W: Write> Interpreter<W> {
             } => {
                 let left_value = self.eval_expr(left)?;
                 match operator.tp {
-                    LogicalOperatorType::And => match left_value.is_truthy() {
-                        false => left_value,
+                    LogicalOperatorType::And => match left_value.borrow().is_truthy() {
+                        false => left_value.clone(),
                         true => self.eval_expr(right)?,
                     },
-                    LogicalOperatorType::Or => match left_value.is_truthy() {
-                        true => left_value,
+                    LogicalOperatorType::Or => match left_value.borrow().is_truthy() {
+                        true => left_value.clone(),
                         false => self.eval_expr(right)?,
                     },
                 }
@@ -350,15 +358,17 @@ impl<W: Write> Interpreter<W> {
         Ok(evaluated)
     }
 
-    fn look_up_variable(&self, reference: &VariableReference) -> Result<&mut V, RuntimeError> {
+    fn look_up_variable(
+        &self,
+        reference: &VariableReference,
+    ) -> Result<Rc<RefCell<V>>, RuntimeError> {
         let env = self.get_env_for_variable(reference)?;
-        let env = env.borrow_mut();
-        match env.get(&reference.name) {
-            Some(v) => {
-                debug!("Variable {} resolved to {}", reference.name, v);
-                Ok(v)
-            }
-            None => Err(RuntimeError::UndefinedVariable(reference.name.clone())),
+        let env = env.borrow();
+        if let Some(v) = env.get(&reference.name) {
+            debug!("Variable {} resolved to {}", reference.name, v.borrow());
+            Ok(v.clone())
+        } else {
+            Err(RuntimeError::UndefinedVariable(reference.name.clone()))
         }
     }
 

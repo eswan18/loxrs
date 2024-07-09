@@ -11,7 +11,7 @@ use crate::interpret::RuntimeError;
 #[derive(Debug, PartialEq)]
 pub struct Environment {
     pub enclosing: Option<Rc<RefCell<Environment>>>,
-    pub values: HashMap<String, LoxValue>,
+    pub values: HashMap<String, Rc<RefCell<LoxValue>>>,
 }
 
 impl Display for Environment {
@@ -34,7 +34,7 @@ impl Environment {
         let comma_separated = self
             .values
             .iter()
-            .map(|(key, value)| format!("{} -> {}", key, value))
+            .map(|(key, value)| format!("{} -> {}", key, value.borrow()))
             .collect::<Vec<String>>()
             .join(", ");
         write!(f, "{} -> {{ {} }}", depth, comma_separated)?;
@@ -51,20 +51,19 @@ impl Environment {
         if self.values.contains_key(name) {
             trace!("Overwriting {} with {}", name, value);
         }
+        let value = Rc::new(RefCell::new(value));
         self.values.insert(name.to_string(), value);
     }
 
     /// Get the value of a variable if it's set.
-    pub fn get(self, name: &str) -> Option<&mut LoxValue> {
-        match self.values.get(name) {
-            Some(mut value) => Some(&mut value),
-            None => None,
-        }
+    pub fn get(&self, name: &str) -> Option<Rc<RefCell<LoxValue>>> {
+        self.values.get(name).map(|v| v.clone())
     }
 
     pub fn assign(&mut self, name: &str, value: LoxValue) -> Result<(), RuntimeError> {
         if self.values.contains_key(name) {
             trace!("Assigning {} to {} (depth {})", value, name, self.depth());
+            let value = Rc::new(RefCell::new(value));
             self.values.insert(name.to_string(), value);
             Ok(())
         } else {

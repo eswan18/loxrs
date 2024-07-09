@@ -1,4 +1,6 @@
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use crate::ast::{BinaryOperator, UnaryOperator};
 use crate::value::{LoxType, LoxValue};
@@ -38,7 +40,7 @@ pub enum RuntimeError {
     // Something genuinely unexpected (a bug, probably).
     InternalError(String),
     // A return call isn't an error per se, but using an error lets us elegantly propagate the return value up the stack.
-    ReturnCall(LoxValue),
+    ReturnCall(Rc<RefCell<LoxValue>>),
 }
 
 impl PartialEq for RuntimeError {
@@ -153,7 +155,7 @@ impl fmt::Display for RuntimeError {
             RuntimeError::UndefinedProperty(name) => {
                 write!(f, "Undefined property '{}'", name)
             }
-            RuntimeError::ReturnCall(value) => write!(f, "ReturnCall: {}", value),
+            RuntimeError::ReturnCall(value) => write!(f, "ReturnCall: {}", value.borrow()),
             RuntimeError::InternalError(msg) => write!(f, "InternalError: {}", msg),
         }
     }
