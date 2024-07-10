@@ -7,6 +7,7 @@ use std::collections::HashMap;
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
 }
 
@@ -83,8 +84,13 @@ impl Resolver {
                     .unwrap()
                     .insert("this".to_string(), true);
                 for method in methods {
-                    let FunctionDefinition { params, body, .. } = method;
-                    self.resolve_function(FunctionType::Method, params, body)?;
+                    let FunctionDefinition { name, params, body } = method;
+                    let function_type = if name == "init" {
+                        FunctionType::Initializer
+                    } else {
+                        FunctionType::Method
+                    };
+                    self.resolve_function(function_type, params, body)?;
                 }
                 self.end_scope()?;
 
@@ -120,8 +126,14 @@ impl Resolver {
                 self.resolve_expr(expr)?;
             }
             Stmt::Return(value) => {
-                if let FunctionType::None = self.current_function {
-                    return Err(ResolveError::InvalidReturn);
+                match self.current_function {
+                    FunctionType::None => return Err(ResolveError::ReturnOutsideFunction),
+                    FunctionType::Initializer => {
+                        if value.is_some() {
+                            return Err(ResolveError::ReturnWithinInitializer);
+                        }
+                    }
+                    _ => {}
                 }
                 if let Some(value) = value {
                     self.resolve_expr(value)?;
@@ -319,7 +331,7 @@ mod tests {
         let stmts = parse_string(input);
         let err = resolve(&stmts).unwrap_err();
         match err {
-            ResolveError::InvalidReturn => {}
+            ResolveError::ReturnOutsideFunction => {}
             _ => panic!("Expected InvalidReturn error"),
         }
     }
@@ -352,5 +364,31 @@ mod tests {
             ResolveError::ThisOutsideClass => {}
             _ => panic!("Expected ThisOutsideClass error"),
         }
+    }
+
+    #[test]
+    fn errors_on_value_returned_from_init() {
+        let input = "class A {
+            init() {
+                return 1;
+            }
+        }";
+        let stmts = parse_string(input);
+        let err = resolve(&stmts).unwrap_err();
+        match err {
+            ResolveError::ReturnWithinInitializer => {}
+            _ => panic!("Expected ReturnWithinInitializer error"),
+        }
+    }
+
+    #[test]
+    fn allows_bare_return_from_init() {
+        let input = "class A {
+            init() {
+                return;
+            }
+        }";
+        let stmts = parse_string(input);
+        resolve(&stmts).unwrap();
     }
 }

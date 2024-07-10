@@ -33,7 +33,12 @@ impl Class {
             let mut callable = init.clone();
             callable = callable.bind(instance.clone());
             let lox_callable = Callable::UserDefined(callable);
-            lox_callable.call(subinterpreter, args)?;
+            match lox_callable.call(subinterpreter, args) {
+                Ok(_) => {}
+                // Returns from the initializer are fine, but they just end the function early.
+                Err(RuntimeError::ReturnCall(_)) => {}
+                Err(e) => return Err(e),
+            }
         }
         Rc::try_unwrap(instance)
             .map(|x| Ok(x.into_inner()))

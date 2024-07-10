@@ -5,7 +5,8 @@ use std::fmt;
 pub enum ResolveError {
     ReadBeforeInitialize(VariableReference),
     Redeclaration(String),
-    InvalidReturn,
+    ReturnOutsideFunction,
+    ReturnWithinInitializer,
     InvalidScopeOperation(String),
     ThisOutsideClass,
 }
@@ -23,7 +24,10 @@ impl fmt::Display for ResolveError {
             ResolveError::Redeclaration(name) => {
                 write!(f, "Variable '{}' is already declared in this scope", name)
             }
-            ResolveError::InvalidReturn => write!(f, "Invalid return statement"),
+            ResolveError::ReturnOutsideFunction => write!(f, "Invalid return statement"),
+            ResolveError::ReturnWithinInitializer => {
+                write!(f, "Cannot return a value from an initializer")
+            }
             ResolveError::InvalidScopeOperation(message) => {
                 write!(f, "Invalid scope operation: {}", message)
             }
