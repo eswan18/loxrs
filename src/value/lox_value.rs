@@ -55,7 +55,7 @@ impl fmt::Display for LoxValue {
             LoxValue::Boolean(b) => write!(f, "{}", b),
             LoxValue::Callable(Callable::Native(_)) => write!(f, "<native-function>"),
             LoxValue::Callable(Callable::UserDefined(_)) => write!(f, "<function>"),
-            LoxValue::Class(Class { name }) => write!(f, "<class {}>", name),
+            LoxValue::Class(Class { name, .. }) => write!(f, "<class {}>", name),
             LoxValue::Instance(Instance { class, .. }) => write!(f, "<{} instance>", class.name),
             LoxValue::Nil => write!(f, "nil"),
         }

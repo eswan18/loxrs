@@ -1,11 +1,9 @@
-class Foo {}
+class Foo {
+    do() {
+        print this.r;
+    }
+}
 var x = Foo();
 
-
-print "setting r";
 x.r = 4;
-print "...done";
-
-print "getting r";
-print x.r;
-print "...done";
+x.do();

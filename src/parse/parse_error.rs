@@ -16,6 +16,7 @@ pub enum ParseError {
     ExpectedRightBrace { line: u32 },
     ExpectedLeftParen { line: u32 },
     ExpectedRightParen { line: u32 },
+    ExpectedMethodDeclaration { line: u32 },
     InvalidAssignmentTarget { expr: Expr, line: u32 },
     TooManyArguments { line: u32 },
 }
@@ -56,6 +57,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::ExpectedRightParen { line } => {
                 write!(f, "ParseError [lint {}]: Expected ')'", line)
+            }
+            ParseError::ExpectedMethodDeclaration { line } => {
+                write!(f, "ParseError [line {}]: Expected method declaration", line)
             }
             ParseError::InvalidAssignmentTarget { line, expr } => {
                 write!(

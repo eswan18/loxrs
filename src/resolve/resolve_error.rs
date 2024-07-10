@@ -7,6 +7,7 @@ pub enum ResolveError {
     Redeclaration(String),
     InvalidReturn,
     InvalidScopeOperation(String),
+    ThisOutsideClass,
 }
 
 impl fmt::Display for ResolveError {
@@ -26,6 +27,7 @@ impl fmt::Display for ResolveError {
             ResolveError::InvalidScopeOperation(message) => {
                 write!(f, "Invalid scope operation: {}", message)
             }
+            ResolveError::ThisOutsideClass => write!(f, "Cannot use 'this' outside of a class"),
         }
     }
 }

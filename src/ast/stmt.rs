@@ -4,15 +4,18 @@ use std::fmt::Display;
 use crate::ast::expr::Expr;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
     Print(Expr),
     Return(Option<Expr>),
     Expression(Expr),
-    Function {
-        name: String,
-        params: Vec<String>,
-        body: Vec<Stmt>,
-    },
+    Function(FunctionDefinition),
     Var {
         name: String,
         initializer: Option<Expr>,
@@ -24,7 +27,7 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     Class {
         name: String,
-        methods: Vec<Stmt>,
+        methods: Vec<FunctionDefinition>,
     },
     If {
         condition: Expr,
@@ -42,7 +45,7 @@ impl Display for Stmt {
                 None => write!(f, "Return;"),
             },
             Stmt::Expression(expr) => write!(f, "{};", expr),
-            Stmt::Function { name, params, body } => {
+            Stmt::Function(FunctionDefinition { name, params, body }) => {
                 write!(f, "fun {}(", name)?;
                 for (i, param) in params.iter().enumerate() {
                     write!(f, "{}", param)?;
@@ -71,7 +74,7 @@ impl Display for Stmt {
             Stmt::Class { name, methods } => {
                 write!(f, "class {} {{\n", name)?;
                 for method in methods {
-                    write!(f, "{}\n", method)?;
+                    write!(f, "{}\n", Stmt::Function(method.clone()))?;
                 }
                 write!(f, "}}")
             }

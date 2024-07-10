@@ -37,6 +37,9 @@ pub enum Expr {
         name: String,
         value: Box<Expr>,
     },
+    This {
+        keyword: VariableReference,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -98,6 +101,9 @@ impl Display for Expr {
                 value,
             } => {
                 write!(f, "{}.{} = {}", object, name, value)
+            }
+            Expr::This { keyword } => {
+                write!(f, "{}", keyword.name)
             }
             Expr::Grouping { expression } => {
                 write!(f, "({})", expression)

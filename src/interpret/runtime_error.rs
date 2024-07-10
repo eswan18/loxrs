@@ -1,6 +1,6 @@
+use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use crate::ast::{BinaryOperator, UnaryOperator};
 use crate::value::{LoxType, LoxValue};
@@ -83,6 +83,16 @@ impl PartialEq for RuntimeError {
                 },
             ) => tp1 == tp2 && l1 == l2,
             (
+                RuntimeError::PropertyAccessTypeError {
+                    property: p1,
+                    tp: t1,
+                },
+                RuntimeError::PropertyAccessTypeError {
+                    property: p2,
+                    tp: t2,
+                },
+            ) => p1 == p2 && t1 == t2,
+            (
                 RuntimeError::ArityError {
                     expected: e1,
                     received: r1,
@@ -98,6 +108,7 @@ impl PartialEq for RuntimeError {
                 err1.kind() == err2.kind()
             }
             (RuntimeError::UndefinedVariable(v1), RuntimeError::UndefinedVariable(v2)) => v1 == v2,
+            (RuntimeError::UndefinedProperty(v1), RuntimeError::UndefinedProperty(v2)) => v1 == v2,
             (RuntimeError::ReturnCall(v1), RuntimeError::ReturnCall(v2)) => v1 == v2,
             _ => false,
         }

@@ -1,13 +1,19 @@
-use crate::ast::{Expr, Stmt, VariableReference};
-use crate::interpret::RuntimeError;
+use crate::ast::{Expr, FunctionDefinition, Stmt, VariableReference};
 use crate::resolve::ResolveError;
 use log::{debug, info};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-pub enum FunctionType {
+enum FunctionType {
     None,
     Function,
+    Method,
+}
+
+#[derive(Debug, Clone)]
+enum ClassType {
+    None,
+    Class,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +37,7 @@ pub fn resolve(stmts: &Vec<Stmt>) -> Result<LocalResolutionMap, ResolveError> {
         scopes: vec![HashMap::new()],
         resolutions: LocalResolutionMap::new(),
         current_function: FunctionType::None,
+        current_class: ClassType::None,
     };
     resolver.resolve_stmts(stmts)?;
     info!("Resolved all variables: {:?}", resolver.resolutions);
@@ -44,6 +51,8 @@ pub struct Resolver {
     resolutions: LocalResolutionMap,
     // Whether we're in a function.
     current_function: FunctionType,
+    // Whether we're in a class.
+    current_class: ClassType,
 }
 
 impl Resolver {
@@ -62,8 +71,24 @@ impl Resolver {
                 self.end_scope()?;
             }
             Stmt::Class { name, methods } => {
+                let enclosing_class = self.current_class.clone();
+                self.current_class = ClassType::Class;
+
                 self.declare(name)?;
                 self.define(name);
+
+                self.begin_scope();
+                self.scopes
+                    .last_mut()
+                    .unwrap()
+                    .insert("this".to_string(), true);
+                for method in methods {
+                    let FunctionDefinition { params, body, .. } = method;
+                    self.resolve_function(FunctionType::Method, params, body)?;
+                }
+                self.end_scope()?;
+
+                self.current_class = enclosing_class;
             }
             Stmt::Var { name, initializer } => {
                 self.declare(name)?;
@@ -72,7 +97,7 @@ impl Resolver {
                 }
                 self.define(name);
             }
-            Stmt::Function { name, params, body } => {
+            Stmt::Function(FunctionDefinition { name, params, body }) => {
                 self.declare(name)?;
                 self.define(name);
                 self.resolve_function(FunctionType::Function, params, body)?;
@@ -198,6 +223,12 @@ impl Resolver {
                 self.resolve_expr(object)?;
                 self.resolve_expr(value)?;
             }
+            Expr::This { keyword } => {
+                if let ClassType::None = self.current_class {
+                    return Err(ResolveError::ThisOutsideClass);
+                }
+                self.resolve_reference(keyword.clone())
+            }
             Expr::Grouping { expression } => {
                 self.resolve_expr(expression)?;
             }
@@ -290,6 +321,36 @@ mod tests {
         match err {
             ResolveError::InvalidReturn => {}
             _ => panic!("Expected InvalidReturn error"),
+        }
+    }
+
+    #[test]
+    fn this() {
+        let input = "class A {
+            method() {
+                this;
+                return this;
+            }
+            other_method() {
+                print this;
+            }
+        }";
+        let stmts = parse_string(input);
+        let resolutions = resolve(&stmts).unwrap();
+        assert_eq!(resolutions.depths.len(), 3);
+        // All 3 references should refer to the same declaration.
+        let depths = resolutions.depths.values().collect::<Vec<&usize>>();
+        assert_eq!(depths, vec![&1, &1, &1]);
+    }
+
+    #[test]
+    fn errors_on_this_outside_of_class() {
+        let input = "fun abc() {\nprint this;\n}";
+        let stmts = parse_string(input);
+        let err = resolve(&stmts).unwrap_err();
+        match err {
+            ResolveError::ThisOutsideClass => {}
+            _ => panic!("Expected ThisOutsideClass error"),
         }
     }
 }

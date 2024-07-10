@@ -55,6 +55,19 @@ impl Environment {
         self.values.insert(name.to_string(), value);
     }
 
+    pub fn define_by_reference(&mut self, name: &str, value: Rc<RefCell<LoxValue>>) {
+        trace!(
+            "Defining {} as {} (type {})",
+            name,
+            value.borrow(),
+            value.borrow().tp()
+        );
+        if self.values.contains_key(name) {
+            trace!("Overwriting {} with {}", name, value.borrow());
+        }
+        self.values.insert(name.to_string(), value);
+    }
+
     /// Get the value of a variable if it's set.
     pub fn get(&self, name: &str) -> Option<Rc<RefCell<LoxValue>>> {
         self.values.get(name).map(|v| v.clone())

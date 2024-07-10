@@ -1,6 +1,7 @@
 use crate::ast::{
-    Ast, BinaryOperator, BinaryOperatorType, Expr, LiteralValue, LogicalOperator,
-    LogicalOperatorType, Stmt, UnaryOperator, UnaryOperatorType, VariableReference,
+    Ast, BinaryOperator, BinaryOperatorType, Expr, FunctionDefinition, LiteralValue,
+    LogicalOperator, LogicalOperatorType, Stmt, UnaryOperator, UnaryOperatorType,
+    VariableReference,
 };
 use crate::parse::ParseError;
 use crate::token::{Token, TokenType};
@@ -86,10 +87,15 @@ impl Parser {
             return Err(ParseError::ExpectedLeftBrace { line });
         }
         // Parse the class body.
-        let mut methods: Vec<Stmt> = Vec::new();
+        let mut methods: Vec<FunctionDefinition> = Vec::new();
         while !self.check_current_token_type(&[TokenType::RightBrace]) && !self.is_at_end() {
             match self.parse_fun_declaration(true) {
-                Ok(stmt) => methods.push(stmt),
+                Ok(Stmt::Function(def)) => methods.push(def),
+                Ok(_) => {
+                    return Err(ParseError::ExpectedMethodDeclaration {
+                        line: self.peek().unwrap().line,
+                    });
+                }
                 Err(err) => return Err(err),
             }
         }
@@ -168,7 +174,7 @@ impl Parser {
         if self.advance_on_match(&[TokenType::RightBrace]).is_none() {
             return Err(ParseError::ExpectedRightBrace { line });
         }
-        Ok(Stmt::Function { name, params, body })
+        Ok(Stmt::Function(FunctionDefinition { name, params, body }))
     }
 
     /// Parse a variable declaration.
@@ -714,6 +720,12 @@ impl Parser {
             TokenType::String(value) => Some(Expr::Literal {
                 value: LiteralValue::String(value.clone()),
             }),
+            TokenType::This => Some(Expr::This {
+                keyword: VariableReference {
+                    name: String::from("this"),
+                    id: Expr::new_id(),
+                },
+            }),
             _ => None,
         };
         if let Some(expr) = literal_expr {
@@ -1219,7 +1231,7 @@ mod tests {
         let stmts = parse(tokens).unwrap();
         assert_eq!(stmts.len(), 1);
         match &stmts[0] {
-            Stmt::Function { name, params, body } => {
+            Stmt::Function(FunctionDefinition { name, params, body }) => {
                 assert_eq!(name, "abc");
                 assert_eq!(params.len(), 0);
                 assert_eq!(body.len(), 1);
@@ -1240,7 +1252,7 @@ mod tests {
         let stmts = parse(tokens).unwrap();
         assert_eq!(stmts.len(), 1);
         match &stmts[0] {
-            Stmt::Function { name, params, .. } => {
+            Stmt::Function(FunctionDefinition { name, params, .. }) => {
                 assert_eq!(name, "abc");
                 assert_eq!(params.len(), 1);
                 assert_eq!(params[0], "x");
@@ -1256,7 +1268,7 @@ mod tests {
         let stmts = parse(tokens).unwrap();
         assert_eq!(stmts.len(), 1);
         match &stmts[0] {
-            Stmt::Function { name, params, .. } => {
+            Stmt::Function(FunctionDefinition { name, params, .. }) => {
                 assert_eq!(name, "abc");
                 assert_eq!(params.len(), 2);
                 assert_eq!(params[0], "x");
@@ -1309,7 +1321,7 @@ mod tests {
             ),
         };
         match fn_stmt {
-            Stmt::Function { body, .. } => {
+            Stmt::Function(FunctionDefinition { body, .. }) => {
                 assert_eq!(body.len(), 1);
                 let stmt = &body[0];
                 assert!(matches!(stmt, Stmt::Return(_)));
@@ -1363,15 +1375,10 @@ mod tests {
             Stmt::Class { name, methods, .. } => {
                 assert_eq!(name, "A");
                 assert_eq!(methods.len(), 1);
-                let method = &methods[0];
-                match method {
-                    Stmt::Function { name, params, body } => {
-                        assert_eq!(params, &["abc", "def"]);
-                        assert_eq!(name, "a");
-                        assert_eq!(body.len(), 1);
-                    }
-                    _ => panic!("The method should be a function declaration"),
-                }
+                let FunctionDefinition { name, params, body } = &methods[0];
+                assert_eq!(name, "a");
+                assert_eq!(params, &["abc", "def"]);
+                assert_eq!(body.len(), 1);
             }
             _ => panic!("The only top-level statement should be a class declaration"),
         }

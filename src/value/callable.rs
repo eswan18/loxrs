@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, trace};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -25,6 +25,16 @@ impl UserDefinedFunction {
             param_names,
             body,
             closure,
+        }
+    }
+
+    pub fn bind(&mut self, instance: Rc<RefCell<LoxValue>>) -> UserDefinedFunction {
+        let mut env = Environment::new(Some(self.closure.clone()));
+        env.define_by_reference("this", instance);
+        UserDefinedFunction {
+            param_names: self.param_names.clone(),
+            body: self.body.clone(),
+            closure: Rc::new(RefCell::new(env)),
         }
     }
 }
@@ -76,10 +86,11 @@ impl Callable {
             }) => {
                 // Note that arity checks happen in the interpreter so we don't worry about them here.
                 // Replace the interpreter's environment with this function's closure.
+                trace!("UDF: working in environment {}", closure.borrow());
                 let subinterpreter_env = Environment::new(Some(closure.clone()));
                 subinterpreter.set_environment(Rc::new(RefCell::new(subinterpreter_env)));
                 debug!(
-                    "Created subinterpreter at level {}",
+                    "UDF: Created subinterpreter at level {}",
                     subinterpreter.get_environment().borrow().depth()
                 );
                 // Start by defining variables for each argument.
@@ -90,7 +101,7 @@ impl Callable {
                         .define(name, value.clone());
                 }
                 debug!(
-                    "function executing in environment {}",
+                    "UDF: function executing in environment {}",
                     subinterpreter.get_environment().borrow()
                 );
                 // Then execute the body.

@@ -1,13 +1,15 @@
 use crate::ast::{
-    Ast, BinaryOperatorType, Expr, LogicalOperatorType, Stmt, UnaryOperatorType, VariableReference,
+    Ast, BinaryOperatorType, Expr, FunctionDefinition, LogicalOperatorType, Stmt,
+    UnaryOperatorType, VariableReference,
 };
 use crate::interpret::environment::Environment;
 use crate::interpret::RuntimeError;
 use crate::resolve::LocalResolutionMap;
 use crate::value::LoxValue as V;
-use crate::value::{Callable, Class, NativeFunction, UserDefinedFunction};
+use crate::value::{Callable, Class, Instance, NativeFunction, UserDefinedFunction};
 use log::debug;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 
@@ -92,7 +94,7 @@ impl<W: Write> Interpreter<W> {
             Stmt::Expression(expr) => {
                 self.eval_expr(expr)?;
             }
-            Stmt::Function { name, params, body } => {
+            Stmt::Function(FunctionDefinition { name, params, body }) => {
                 let function = Callable::UserDefined(UserDefinedFunction::new(
                     params.clone(),
                     body.clone(),
@@ -132,8 +134,21 @@ impl<W: Write> Interpreter<W> {
             Stmt::Class { name, methods } => {
                 // Initially define as nil to allow recursive references.
                 self.environment.borrow_mut().define(&name, V::Nil);
-                // Build a LoxClass.
-                let class = V::Class(Class { name: name.clone() });
+                // Create the class' methods.
+                let mut method_map = HashMap::new();
+                for method in methods {
+                    let function = UserDefinedFunction::new(
+                        method.params.clone(),
+                        method.body.clone(),
+                        self.environment.clone(),
+                    );
+                    method_map.insert(method.name.clone(), function);
+                }
+                // Build the class.
+                let class = V::Class(Class {
+                    name: name.clone(),
+                    methods: method_map,
+                });
                 // Assign the new class to the name in the environment.
                 self.environment.borrow_mut().assign(&name, class)?;
             }
@@ -250,7 +265,13 @@ impl<W: Write> Interpreter<W> {
                     .map(|arg| self.eval_expr(arg).map(|v| v.borrow().clone()))
                     .collect::<Result<Vec<V>, RuntimeError>>()?;
                 // Unwrap the callable or throw an error if it's not callable.
-                let returned = match & *callee {
+                let subinterpreter = Interpreter {
+                    writer: self.writer.clone(),
+                    globals: self.globals.clone(),
+                    environment: self.globals.clone(),
+                    locals: self.locals.clone(),
+                };
+                let returned = match &*callee {
                     V::Callable(callable) => {
                         // Arity check
                         if evaluted_args.len() != callable.arity() {
@@ -260,13 +281,6 @@ impl<W: Write> Interpreter<W> {
                                 line: *line,
                             });
                         }
-                        // Call it and return the result.
-                        let subinterpreter = Interpreter {
-                            writer: self.writer.clone(),
-                            globals: self.globals.clone(),
-                            environment: self.globals.clone(),
-                            locals: self.locals.clone(),
-                        };
                         // Call the function but trap Return calls (which propagate like errors) instead of propagating them upward.
                         match callable.call(subinterpreter, evaluted_args) {
                             Ok(v) => v,
@@ -278,9 +292,14 @@ impl<W: Write> Interpreter<W> {
                         }
                     }
                     V::Class(class) => {
-                        // No need for arity check; classes never take arguments.
-                        // Just create a new instance and return it.
-                        class.new_instance()
+                        if evaluted_args.len() != class.arity() {
+                            return Err(RuntimeError::ArityError {
+                                expected: class.arity(),
+                                received: evaluted_args.len(),
+                                line: *line,
+                            });
+                        }
+                        class.call(subinterpreter, evaluted_args)?
                     }
                     v => {
                         return Err(RuntimeError::CallableTypeError {
@@ -292,18 +311,18 @@ impl<W: Write> Interpreter<W> {
                 Rc::new(RefCell::new(returned))
             }
             Expr::Get { object, name } => {
-                let object = self.eval_expr(object)?;
-                let object = object.borrow();
-                let instance = match & *object {
-                    V::Instance(instance) => instance,
+                let instance = self.eval_expr(object)?;
+                let borrowed = instance.borrow();
+                match *borrowed {
+                    V::Instance(_) => {}
                     _ => {
                         return Err(RuntimeError::PropertyAccessTypeError {
-                            tp: object.tp(),
+                            tp: borrowed.tp(),
                             property: name.to_string(),
                         });
                     }
                 };
-                match instance.get(name) {
+                match Instance::get(instance.clone(), name) {
                     Some(v) => v.clone(),
                     None => {
                         return Err(RuntimeError::UndefinedProperty(name.clone()));
@@ -331,6 +350,7 @@ impl<W: Write> Interpreter<W> {
                 debug!("updated instance, new fields {:?}", instance.fields);
                 value.clone()
             }
+            Expr::This { keyword } => self.look_up_variable(keyword)?,
             Expr::Variable(reference) => self.look_up_variable(reference)?,
             Expr::Assignment { reference, value } => {
                 let evaluated = self.eval_expr(value)?;
@@ -442,7 +462,9 @@ mod tests {
             Stmt::Expression(expr) => expr,
             _ => panic!("Expected an expression statement"),
         };
-        interpreter.eval_expr(&expr)
+        let evaluated = interpreter.eval_expr(&expr)?;
+        let evaluated = evaluated.borrow().clone();
+        Ok(evaluated)
     }
 
     /// Interpret one or more statements and collect the printed output into a string.
@@ -947,7 +969,7 @@ mod tests {
     }
 
     #[test]
-    fn fib() {
+    fn recursion() {
         let output = exec_ast("fun fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } print fib(2); print fib(8);").unwrap();
         assert_eq!(output, "1\n21\n");
     }
@@ -983,5 +1005,226 @@ mod tests {
         }",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn allows_empty_instance_creation_and_dynamic_attributes() {
+        let output = exec_ast(
+            "
+        class Foo {}
+        var foo = Foo();
+        foo.bar = 3;
+        print foo.bar;
+        ",
+        )
+        .unwrap();
+        assert_eq!(output, "3\n");
+    }
+
+    #[test]
+    fn errors_on_access_of_undefined_property() {
+        let error = exec_ast(
+            "
+        class Foo {}
+        var foo = Foo();
+        print foo.bar;
+        ",
+        )
+        .unwrap_err();
+        assert_eq!(error, RuntimeError::UndefinedProperty("bar".to_string()));
+    }
+
+    #[test]
+    fn nested_instances() {
+        let output = exec_ast(
+            "
+            class Foo {}
+            var foo = Foo();
+            foo.baz = 4;
+
+            foo.bar = Foo();
+            foo.bar.baz = 3;
+
+            print foo.baz;
+            print foo.bar.baz;
+            ",
+        );
+        assert_eq!(output.unwrap(), "4\n3\n");
+    }
+
+    #[test]
+    fn errors_setting_property_on_non_instance() {
+        let error = exec_ast("var foo = 123;\nfoo.baz = 4;").unwrap_err();
+        assert_eq!(
+            error,
+            RuntimeError::PropertyAccessTypeError {
+                tp: LoxType::Number,
+                property: "baz".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn simple_methods() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    print \"bar\";
+                }
+            }
+            var foo = Foo();
+            foo.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "bar\n");
+    }
+
+    #[test]
+    fn method_closures() {
+        let output = exec_ast(
+            "
+            var x = 1;
+            class Foo {
+                bar() {
+                    x = x + 1;
+                }
+            }
+            var foo = Foo();
+            print x;
+            foo.bar();
+            foo.bar();
+            print x;
+            ",
+        );
+        assert_eq!(output.unwrap(), "1\n3\n");
+    }
+
+    #[test]
+    fn method_this() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    print this.x;
+                }
+            }
+            var foo = Foo();
+            foo.x = 3;
+            foo.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "3\n");
+    }
+
+    #[test]
+    fn method_this_assignment() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    this.x = 3;
+                }
+            }
+            var foo = Foo();
+            foo.bar();
+            print foo.x;
+            ",
+        );
+        assert_eq!(output.unwrap(), "3\n");
+    }
+
+    #[test]
+    fn init_is_called() {
+        let output = exec_ast(
+            "
+            class Foo {
+                init() {
+                    print \"init!\";
+                }
+            }
+            var foo = Foo();
+            ",
+        );
+        assert_eq!(output.unwrap(), "init!\n");
+    }
+
+    #[test]
+    fn init_can_set_values() {
+        let output = exec_ast(
+            "
+            class Foo {
+                init() {
+                    this.x = 3;
+                }
+
+                bar() {
+                    print this.x;
+                }
+            }
+            var foo = Foo();
+            foo.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "3\n");
+    }
+
+    #[test]
+    fn init_takes_arguments() {
+        let output = exec_ast(
+            "
+            class Foo {
+                init(x) {
+                    this.x = x + 1;
+                }
+
+                bar() {
+                    print this.x;
+                }
+            }
+            var foo = Foo(3);
+            foo.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "4\n");
+    }
+
+    #[test]
+    fn errors_on_bad_init_arity() {
+        let error = exec_ast(
+            "
+            class Foo {
+                init(x) {
+                    this.x = x + 1;
+                }
+            }
+            var foo = Foo();
+            ",
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::ArityError {
+                expected: 1,
+                received: 0,
+                ..
+            }
+        ));
+
+        let error = exec_ast(
+            "
+            class Foo {}
+            var foo = Foo(1);
+            ",
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::ArityError {
+                expected: 0,
+                received: 1,
+                ..
+            }
+        ));
     }
 }
