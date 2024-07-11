@@ -1,8 +1,14 @@
 class Foo {
-    init() {
-        return;
+    init(x) {
+        this.x = x;
+    }
+
+    p() {
+        print this.x;
     }
 }
 
-var f = Foo();
-print f.init();
+var F = Foo;
+
+var f = F(1);
+f.p();

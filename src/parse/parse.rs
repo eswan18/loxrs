@@ -82,6 +82,25 @@ impl Parser {
                 });
             }
         };
+        let has_superclass = self.advance_on_match(&[TokenType::Less]).is_some();
+        let superclass = if has_superclass {
+            // If there's a less than sign, we're dealing with a class with a superclass.
+            // Consume the superclass name.
+            match self.advance_on_match(&[TokenType::Identifier]) {
+                Some(t) => Some(Expr::Variable(VariableReference {
+                    name: t.lexeme.clone(),
+                    id: Expr::new_id(),
+                })),
+                None => {
+                    return Err(ParseError::ExpectedIdentifier {
+                        line: self.peek().unwrap().line,
+                        entity: String::from("superclass name"),
+                    });
+                }
+            }
+        } else {
+            None
+        };
         // Consume the left brace.
         if self.advance_on_match(&[TokenType::LeftBrace]).is_none() {
             return Err(ParseError::ExpectedLeftBrace { line });
@@ -103,7 +122,11 @@ impl Parser {
         if self.advance_on_match(&[TokenType::RightBrace]).is_none() {
             return Err(ParseError::ExpectedRightBrace { line });
         }
-        Ok(Stmt::Class { name, methods })
+        Ok(Stmt::Class {
+            name,
+            methods,
+            superclass,
+        })
     }
 
     /// Parse a function declaration.
@@ -1398,6 +1421,26 @@ mod tests {
                 }
             }
             _ => panic!("Expr should be a Get"),
+        }
+    }
+
+    #[test]
+    fn superclass() {
+        let input = "class A < B {}";
+        let tokens = scan(input.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt = &stmts[0];
+        match stmt {
+            Stmt::Class {
+                name, superclass, ..
+            } => {
+                assert_eq!(name, "A");
+                assert!(
+                    matches!(superclass, Some(Expr::Variable(VariableReference { name, .. })) if name == "B")
+                );
+            }
+            _ => panic!("The only top-level statement should be a class declaration"),
         }
     }
 }

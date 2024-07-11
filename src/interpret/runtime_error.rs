@@ -27,6 +27,9 @@ pub enum RuntimeError {
         property: String,
         tp: LoxType,
     },
+    SuperclassTypeError {
+        superclass: LoxType,
+    },
     ArityError {
         expected: usize,
         received: usize,
@@ -93,6 +96,10 @@ impl PartialEq for RuntimeError {
                 },
             ) => p1 == p2 && t1 == t2,
             (
+                RuntimeError::SuperclassTypeError { superclass: s1 },
+                RuntimeError::SuperclassTypeError { superclass: s2 },
+            ) => s1 == s2,
+            (
                 RuntimeError::ArityError {
                     expected: e1,
                     received: r1,
@@ -150,6 +157,9 @@ impl fmt::Display for RuntimeError {
             }
             RuntimeError::PropertyAccessTypeError { property, tp } => {
                 write!(f, "Cannot accesss property \"{}\" on type {}", property, tp)
+            }
+            RuntimeError::SuperclassTypeError { superclass } => {
+                write!(f, "Superclass must be a class, not {}", superclass)
             }
             RuntimeError::ArityError {
                 expected,

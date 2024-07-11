@@ -8,6 +8,7 @@ pub enum ResolveError {
     ReturnOutsideFunction,
     ReturnWithinInitializer,
     InvalidScopeOperation(String),
+    InheritanceCycle(String),
     ThisOutsideClass,
 }
 
@@ -30,6 +31,9 @@ impl fmt::Display for ResolveError {
             }
             ResolveError::InvalidScopeOperation(message) => {
                 write!(f, "Invalid scope operation: {}", message)
+            }
+            ResolveError::InheritanceCycle(class_name) => {
+                write!(f, "Inheritance cycle detected in class '{}'", class_name)
             }
             ResolveError::ThisOutsideClass => write!(f, "Cannot use 'this' outside of a class"),
         }

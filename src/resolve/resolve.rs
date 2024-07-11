@@ -71,12 +71,25 @@ impl Resolver {
                 self.resolve_stmts(stmts)?;
                 self.end_scope()?;
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class {
+                name,
+                methods,
+                superclass,
+            } => {
                 let enclosing_class = self.current_class.clone();
                 self.current_class = ClassType::Class;
 
                 self.declare(name)?;
                 self.define(name);
+
+                if let Some(superclass) = superclass {
+                    if let Expr::Variable(reference) = superclass {
+                        if &reference.name == name {
+                            return Err(ResolveError::InheritanceCycle(name.clone()));
+                        }
+                    }
+                    self.resolve_expr(superclass)?;
+                }
 
                 self.begin_scope();
                 self.scopes
@@ -390,5 +403,16 @@ mod tests {
         }";
         let stmts = parse_string(input);
         resolve(&stmts).unwrap();
+    }
+
+    #[test]
+    fn errors_on_inheritance_cycle() {
+        let input = "class A < A {}";
+        let stmts = parse_string(input);
+        let err = resolve(&stmts).unwrap_err();
+        match err {
+            ResolveError::InheritanceCycle(_) => {}
+            _ => panic!("Expected InheritanceCycle error"),
+        }
     }
 }

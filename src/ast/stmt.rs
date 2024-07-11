@@ -28,6 +28,7 @@ pub enum Stmt {
     Class {
         name: String,
         methods: Vec<FunctionDefinition>,
+        superclass: Option<Expr>,
     },
     If {
         condition: Expr,
@@ -71,7 +72,7 @@ impl Display for Stmt {
                 }
                 write!(f, "}}")
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class { name, methods, .. } => {
                 write!(f, "class {} {{\n", name)?;
                 for method in methods {
                     write!(f, "{}\n", Stmt::Function(method.clone()))?;

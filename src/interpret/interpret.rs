@@ -131,7 +131,28 @@ impl<W: Write> Interpreter<W> {
                     subinterpreter.eval_stmt(stmt)?;
                 }
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class {
+                name,
+                methods,
+                superclass,
+            } => {
+                // Deal with superclass if it exists.
+                let superclass = match superclass {
+                    Some(expr) => {
+                        let evaluated = self.eval_expr(expr)?;
+                        let evaluated = evaluated.borrow().clone();
+                        match evaluated {
+                            V::Class(class) => Some(class),
+                            _ => {
+                                return Err(RuntimeError::SuperclassTypeError {
+                                    superclass: evaluated.tp(),
+                                })
+                            }
+                        }
+                    }
+                    None => None,
+                };
+
                 // Initially define as nil to allow recursive references.
                 self.environment.borrow_mut().define(&name, V::Nil);
                 // Create the class' methods.
@@ -1226,5 +1247,22 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn errors_on_superclass_that_isnt_a_class() {
+        let error = exec_ast(
+            "
+            var Foo = 3;
+            class Bar < Foo {}
+            ",
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            RuntimeError::SuperclassTypeError {
+                superclass: LoxType::Number
+            }
+        );
     }
 }
