@@ -140,15 +140,16 @@ impl<W: Write> Interpreter<W> {
                 let superclass = match superclass {
                     Some(expr) => {
                         let evaluated = self.eval_expr(expr)?;
-                        let evaluated = evaluated.borrow().clone();
-                        match evaluated {
-                            V::Class(class) => Some(class),
+                        let value = evaluated.borrow();
+                        match *value {
+                            V::Class(_) => {}
                             _ => {
                                 return Err(RuntimeError::SuperclassTypeError {
-                                    superclass: evaluated.tp(),
+                                    superclass: value.tp(),
                                 })
                             }
                         }
+                        Some(evaluated.clone())
                     }
                     None => None,
                 };
@@ -168,6 +169,7 @@ impl<W: Write> Interpreter<W> {
                 // Build the class.
                 let class = V::Class(Class {
                     name: name.clone(),
+                    superclass,
                     methods: method_map,
                 });
                 // Assign the new class to the name in the environment.
@@ -1264,5 +1266,22 @@ mod tests {
                 superclass: LoxType::Number
             }
         );
+    }
+
+    #[test]
+    fn test_method_inheritance() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    print \"foo\";
+                }
+            }
+            class Bar < Foo {}
+            var bar = Bar();
+            bar.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "foo\n");
     }
 }

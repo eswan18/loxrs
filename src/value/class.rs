@@ -12,6 +12,7 @@ use super::UserDefinedFunction;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Class {
     pub name: String,
+    pub superclass: Option<Rc<RefCell<LoxValue>>>,
     pub methods: HashMap<String, UserDefinedFunction>,
 }
 
@@ -45,8 +46,18 @@ impl Class {
             .unwrap()
     }
 
-    pub fn find_method(&self, name: &str) -> Option<&UserDefinedFunction> {
-        self.methods.get(name)
+    pub fn find_method(&self, name: &str) -> Option<UserDefinedFunction> {
+        if let Some(method) = self.methods.get(name) {
+            return Some(method.clone());
+        }
+        if let Some(superclass_rc) = self.superclass.clone() {
+            // Pull the method off the superclass
+            let superclass = superclass_rc.borrow();
+            if let LoxValue::Class(superclass) = superclass.clone() {
+                return superclass.find_method(name);
+            }
+        }
+        None
     }
 
     pub fn arity(&self) -> usize {
