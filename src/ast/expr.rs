@@ -37,6 +37,10 @@ pub enum Expr {
         name: String,
         value: Box<Expr>,
     },
+    Super {
+        keyword: VariableReference,
+        method: String,
+    },
     This {
         keyword: VariableReference,
     },
@@ -101,6 +105,9 @@ impl Display for Expr {
                 value,
             } => {
                 write!(f, "{}.{} = {}", object, name, value)
+            }
+            Expr::Super { method, .. } => {
+                write!(f, "super.{}", method)
             }
             Expr::This { keyword } => {
                 write!(f, "{}", keyword.name)

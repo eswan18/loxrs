@@ -15,6 +15,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +92,14 @@ impl Resolver {
                     self.resolve_expr(superclass)?;
                 }
 
+                if superclass.is_some() {
+                    self.begin_scope();
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert("super".to_string(), true);
+                }
+
                 self.begin_scope();
                 self.scopes
                     .last_mut()
@@ -106,6 +115,10 @@ impl Resolver {
                     self.resolve_function(function_type, params, body)?;
                 }
                 self.end_scope()?;
+
+                if superclass.is_some() {
+                    self.end_scope()?;
+                }
 
                 self.current_class = enclosing_class;
             }
@@ -247,6 +260,9 @@ impl Resolver {
             Expr::Set { object, value, .. } => {
                 self.resolve_expr(object)?;
                 self.resolve_expr(value)?;
+            }
+            Expr::Super { keyword, .. } => {
+                self.resolve_reference(keyword.clone());
             }
             Expr::This { keyword } => {
                 if let ClassType::None = self.current_class {

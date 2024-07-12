@@ -156,6 +156,14 @@ impl<W: Write> Interpreter<W> {
 
                 // Initially define as nil to allow recursive references.
                 self.environment.borrow_mut().define(&name, V::Nil);
+
+                // Temporarily create a reference to the superclass in the environment.
+                if let Some(sc) = superclass.clone() {
+                    let mut env = Environment::new(Some(self.environment.clone()));
+                    env.define_by_reference("super", sc.clone());
+                    self.environment = Rc::new(RefCell::new(env));
+                }
+
                 // Create the class' methods.
                 let mut method_map = HashMap::new();
                 for method in methods {
@@ -169,9 +177,16 @@ impl<W: Write> Interpreter<W> {
                 // Build the class.
                 let class = V::Class(Class {
                     name: name.clone(),
-                    superclass,
+                    superclass: superclass.clone(),
                     methods: method_map,
                 });
+
+                // If we added an environment for the superclass, pop it.
+                if superclass.is_some() {
+                    let old_env = self.environment.borrow().enclosing.clone().unwrap();
+                    self.environment = old_env;
+                }
+
                 // Assign the new class to the name in the environment.
                 self.environment.borrow_mut().assign(&name, class)?;
             }
@@ -373,6 +388,48 @@ impl<W: Write> Interpreter<W> {
                 debug!("updated instance, new fields {:?}", instance.fields);
                 value.clone()
             }
+
+            Expr::Super { keyword, method } => {
+                let super_depth = match self.locals.depths.get(keyword) {
+                    Some(d) => *d,
+                    None => {
+                        return Err(RuntimeError::InternalError(
+                            "Super keyword not found in locals".to_string(),
+                        ))
+                    }
+                };
+                let super_env = self.get_env_at_depth(super_depth)?;
+                let superclass = match super_env.borrow().get("super") {
+                    Some(v) => v,
+                    None => {
+                        return Err(RuntimeError::InternalError(
+                            "Super keyword not found in environment".to_string(),
+                        ))
+                    }
+                };
+                let this_env = self.get_env_at_depth(super_depth - 1)?;
+                let this = match this_env.borrow().get("this") {
+                    Some(v) => v,
+                    None => {
+                        return Err(RuntimeError::InternalError(
+                            "This keyword not found in environment".to_string(),
+                        ))
+                    }
+                };
+                let mut method = match &*superclass.borrow() {
+                    V::Class(class) => match class.find_method(&method) {
+                        Some(method) => method,
+                        None => {
+                            return Err(RuntimeError::UndefinedProperty(method.to_string()));
+                        }
+                    },
+                    v => return Err(RuntimeError::SuperclassTypeError { superclass: v.tp() }),
+                };
+                let method = method.bind(this.clone());
+                let lox_value = V::Callable(Callable::UserDefined(method));
+                Rc::new(RefCell::new(lox_value))
+            }
+
             Expr::This { keyword } => self.look_up_variable(keyword)?,
             Expr::Variable(reference) => self.look_up_variable(reference)?,
             Expr::Assignment { reference, value } => {
@@ -401,6 +458,7 @@ impl<W: Write> Interpreter<W> {
         Ok(evaluated)
     }
 
+    /// Fetch the value of a variable by its reference.
     fn look_up_variable(
         &self,
         reference: &VariableReference,
@@ -446,6 +504,12 @@ impl<W: Write> Interpreter<W> {
             }
         };
         // Get the environment `depth` levels above this one.
+        let env = self.get_env_at_depth(depth)?;
+        Ok(env)
+    }
+
+    /// Get the environment `depth` levels up in the interpreter's environment stack.
+    fn get_env_at_depth(&self, depth: usize) -> Result<Rc<RefCell<Environment>>, RuntimeError> {
         let mut env = self.environment.clone();
         for _ in 0..depth {
             let enclosing_env = env.borrow().enclosing.clone();
@@ -1269,7 +1333,7 @@ mod tests {
     }
 
     #[test]
-    fn test_method_inheritance() {
+    fn method_inheritance() {
         let output = exec_ast(
             "
             class Foo {
@@ -1283,5 +1347,96 @@ mod tests {
             ",
         );
         assert_eq!(output.unwrap(), "foo\n");
+    }
+
+    #[test]
+    fn method_override() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    print \"foo\";
+                }
+            }
+            class Bar < Foo {
+                bar() {
+                    print \"bar\";
+                }
+            }
+            var bar = Bar();
+            bar.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "bar\n");
+    }
+
+    #[test]
+    fn super_call() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    print \"foo\";
+                }
+            }
+            class Bar < Foo {
+                bar() {
+                    super.bar();
+                    print \"bar\";
+                }
+            }
+            var bar = Bar();
+            bar.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "foo\nbar\n");
+    }
+
+    #[test]
+    fn this_in_superclass() {
+        let output = exec_ast(
+            "
+            class Foo {
+                bar() {
+                    print this.x;
+                }
+            }
+            class Bar < Foo {
+                init() {
+                    this.x = 3;
+                }
+            }
+            var bar = Bar();
+            bar.bar();
+            ",
+        );
+        assert_eq!(output.unwrap(), "3\n");
+    }
+
+    #[test]
+    fn this_superclass_semantics_book_example() {
+        let output = exec_ast(
+            "
+            class A {
+                method() {
+                    print \"A method\";
+                }
+            }
+
+            class B < A {
+                method() {
+                    print \"B method\";
+                }
+
+                test() {
+                    super.method();
+                }
+            }
+
+            class C < B {}
+
+            C().test();",
+        );
+        assert_eq!(output.unwrap(), "A method\n");
     }
 }

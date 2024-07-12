@@ -751,10 +751,39 @@ impl Parser {
             }),
             _ => None,
         };
+        // If we found a literal, consume the input token and return.
         if let Some(expr) = literal_expr {
-            // Consume the input token.
             self.advance();
             return Ok(expr);
+        }
+
+        // Check for a super call, which is a special case:
+        // a "literal" `super` that also requires more parsing afterward, since it must be followed by a method.
+        if token.tp == TokenType::Super {
+            let super_token = self.advance().clone();
+            if self.advance_on_match(&[TokenType::Dot]).is_none() {
+                return Err(ParseError::ExpectedToken {
+                    line: super_token.line,
+                    token: TokenType::Dot,
+                });
+            }
+            let method = match self.advance_on_match(&[TokenType::Identifier]) {
+                Some(t) => t.lexeme.clone(),
+                None => {
+                    return Err(ParseError::ExpectedIdentifier {
+                        line: self.peek().unwrap().line,
+                        entity: String::from("method name"),
+                    });
+                }
+            };
+            let keyword_reference = VariableReference {
+                name: String::from("super"),
+                id: Expr::new_id(),
+            };
+            return Ok(Expr::Super {
+                method,
+                keyword: keyword_reference,
+            });
         }
 
         if let Some(id_token) = self.advance_on_match(&[TokenType::Identifier]) {
@@ -1441,6 +1470,34 @@ mod tests {
                 );
             }
             _ => panic!("The only top-level statement should be a class declaration"),
+        }
+    }
+
+    #[test]
+    fn super_call() {
+        let output = " fun bar() { super.foo(); }";
+        let tokens = scan(output.to_string()).unwrap();
+        let stmts = parse(tokens).unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt = &stmts[0];
+        match stmt {
+            Stmt::Function(FunctionDefinition { body, .. }) => {
+                assert_eq!(body.len(), 1);
+                let stmt = &body[0];
+                match stmt {
+                    Stmt::Expression(expr) => match expr {
+                        Expr::Call { callee, .. } => match *callee.clone() {
+                            Expr::Super { method, .. } => {
+                                assert_eq!(method, "foo");
+                            }
+                            _ => panic!("The callee should be a get expression"),
+                        },
+                        _ => panic!("The expression should be a super call"),
+                    },
+                    _ => panic!("The only statement in the function should be an expression"),
+                }
+            }
+            _ => panic!("The only top-level statement should be a function declaration"),
         }
     }
 }
