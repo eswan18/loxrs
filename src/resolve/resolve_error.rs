@@ -10,6 +10,7 @@ pub enum ResolveError {
     InvalidScopeOperation(String),
     InheritanceCycle(String),
     ThisOutsideClass,
+    SuperOutsideSubclass,
 }
 
 impl fmt::Display for ResolveError {
@@ -36,6 +37,9 @@ impl fmt::Display for ResolveError {
                 write!(f, "Inheritance cycle detected in class '{}'", class_name)
             }
             ResolveError::ThisOutsideClass => write!(f, "Cannot use 'this' outside of a class"),
+            ResolveError::SuperOutsideSubclass => {
+                write!(f, "Cannot use 'super' outside of a subclass")
+            }
         }
     }
 }

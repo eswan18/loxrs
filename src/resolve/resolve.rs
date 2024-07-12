@@ -11,7 +11,7 @@ enum FunctionType {
     Method,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum ClassType {
     None,
     Class,
@@ -84,6 +84,7 @@ impl Resolver {
                 self.define(name);
 
                 if let Some(superclass) = superclass {
+                    self.current_class = ClassType::Subclass;
                     if let Expr::Variable(reference) = superclass {
                         if &reference.name == name {
                             return Err(ResolveError::InheritanceCycle(name.clone()));
@@ -262,6 +263,9 @@ impl Resolver {
                 self.resolve_expr(value)?;
             }
             Expr::Super { keyword, .. } => {
+                if self.current_class != ClassType::Subclass {
+                    return Err(ResolveError::SuperOutsideSubclass);
+                }
                 self.resolve_reference(keyword.clone());
             }
             Expr::This { keyword } => {
@@ -429,6 +433,22 @@ mod tests {
         match err {
             ResolveError::InheritanceCycle(_) => {}
             _ => panic!("Expected InheritanceCycle error"),
+        }
+    }
+
+    #[test]
+    fn errors_on_super_outside_subclass() {
+        let inputs = [
+            "super.foo();",
+            "class Foo { call_foo() { var x = super.foo(); } }",
+        ];
+        for input in inputs.iter() {
+            let stmts = parse_string(input);
+            let err = resolve(&stmts).unwrap_err();
+            match err {
+                ResolveError::SuperOutsideSubclass => {}
+                _ => panic!("Expected InvalidSuper error"),
+            }
         }
     }
 }
