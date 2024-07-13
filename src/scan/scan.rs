@@ -194,10 +194,7 @@ impl Scanner {
         // Consume the closing ".
         self.advance();
 
-        // Trim the quotes off the string we've scanned.
-        let raw_value = self.source[self.start..self.current].to_string();
-        let value = raw_value[1..raw_value.len() - 1].to_string();
-        Some(TokenType::String(value))
+        Some(TokenType::String)
     }
 
     fn scan_number(&mut self) -> Option<TokenType> {
@@ -229,7 +226,7 @@ impl Scanner {
             .to_string()
             .parse::<f64>()
             .unwrap(); // unwrapping here is okay because we've already validated the string is a number.
-        Some(TokenType::Number(value))
+        Some(TokenType::Number)
     }
 
     fn scan_identifier_or_keyword(&mut self) -> TokenType {
@@ -366,11 +363,7 @@ mod tests {
         assert_eq!(tokens.len(), 2);
         assert_eq!(
             tokens[0],
-            Token::new(
-                TokenType::String("abcdef".to_string()),
-                "\"abcdef\"".to_string(),
-                1
-            )
+            Token::new(TokenType::String, "\"abcdef\"".to_string(), 1)
         );
     }
 
@@ -387,9 +380,9 @@ mod tests {
             token_types,
             vec![
                 TokenType::LeftParen,
-                TokenType::String("abcdef".to_string()),
+                TokenType::String,
                 TokenType::Plus,
-                TokenType::String("ghijkl".to_string()),
+                TokenType::String,
                 TokenType::RightParen,
                 TokenType::Eof
             ]
@@ -405,11 +398,7 @@ mod tests {
         assert_eq!(tokens.len(), 2);
         assert_eq!(
             tokens[0],
-            Token::new(
-                TokenType::String("abc\ndef".to_string()),
-                "\"abc\ndef\"".to_string(),
-                2
-            )
+            Token::new(TokenType::String, "\"abc\ndef\"".to_string(), 2)
         );
     }
 
@@ -420,15 +409,15 @@ mod tests {
         assert_eq!(tokens.len(), 4);
         assert_eq!(
             tokens[0],
-            Token::new(TokenType::Number(123.0), "123".to_string(), 1)
+            Token::new(TokenType::Number, "123".to_string(), 1)
         );
         assert_eq!(
             tokens[1],
-            Token::new(TokenType::Number(4.3), "4.3".to_string(), 2)
+            Token::new(TokenType::Number, "4.3".to_string(), 2)
         );
         assert_eq!(
             tokens[2],
-            Token::new(TokenType::Number(0.0), "0.00".to_string(), 3)
+            Token::new(TokenType::Number, "0.00".to_string(), 3)
         );
     }
 
@@ -440,17 +429,14 @@ mod tests {
         assert_eq!(tokens[0], Token::new(TokenType::Dot, ".".to_string(), 1));
         assert_eq!(
             tokens[1],
-            Token::new(TokenType::Number(123.0), "123".to_string(), 1)
+            Token::new(TokenType::Number, "123".to_string(), 1)
         );
         assert_eq!(
             tokens[2],
-            Token::new(TokenType::Number(4.5), "4.5".to_string(), 1)
+            Token::new(TokenType::Number, "4.5".to_string(), 1)
         );
         assert_eq!(tokens[3], Token::new(TokenType::Dot, ".".to_string(), 1));
-        assert_eq!(
-            tokens[4],
-            Token::new(TokenType::Number(5.0), "5".to_string(), 1)
-        );
+        assert_eq!(tokens[4], Token::new(TokenType::Number, "5".to_string(), 1));
     }
 
     #[test]

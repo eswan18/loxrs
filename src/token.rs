@@ -26,8 +26,8 @@ pub enum TokenType {
     LessEqual,
 
     // identifier
-    String(String),
-    Number(f64),
+    String,
+    Number,
     Identifier,
 
     // keywords.
@@ -73,8 +73,8 @@ impl fmt::Display for TokenType {
             TokenType::GreaterEqual => write!(f, ">="),
             TokenType::Less => write!(f, "<"),
             TokenType::LessEqual => write!(f, "<="),
-            TokenType::String(s) => write!(f, "{}", s),
-            TokenType::Number(n) => write!(f, "{}", n),
+            TokenType::String => write!(f, "String"),
+            TokenType::Number => write!(f, "Number"),
             TokenType::Identifier => write!(f, "Identifier"),
             TokenType::And => write!(f, "and"),
             TokenType::Class => write!(f, "class"),
@@ -99,9 +99,9 @@ impl fmt::Display for TokenType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    pub tp: TokenType,
     pub lexeme: String,
     pub line: u32,
+    pub tp: TokenType,
 }
 
 impl Token {
@@ -113,8 +113,7 @@ impl Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.tp {
-            TokenType::String(s) => write!(f, "{}", s),
-            TokenType::Number(n) => write!(f, "{}", n),
+            TokenType::String | TokenType::Number => write!(f, "{}", self.lexeme),
             _ => write!(f, "{}", self.tp),
         }
     }

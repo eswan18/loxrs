@@ -737,12 +737,23 @@ impl Parser {
             TokenType::Nil => Some(Expr::Literal {
                 value: LiteralValue::Nil,
             }),
-            TokenType::Number(value) => Some(Expr::Literal {
-                value: LiteralValue::Number(value.clone()),
-            }),
-            TokenType::String(value) => Some(Expr::Literal {
-                value: LiteralValue::String(value.clone()),
-            }),
+            TokenType::Number => {
+                let literal_number =
+                    token
+                        .lexeme
+                        .parse::<f64>()
+                        .map_err(|_| ParseError::InvalidNumber {
+                            line: token.line,
+                            lexeme: token.lexeme.clone(),
+                        })?;
+                let value = LiteralValue::Number(literal_number);
+                Some(Expr::Literal { value })
+            }
+            TokenType::String => {
+                let literal_string = token.lexeme[1..token.lexeme.len() - 1].to_string();
+                let value = LiteralValue::String(literal_string);
+                Some(Expr::Literal { value })
+            }
             TokenType::This => Some(Expr::This {
                 keyword: VariableReference {
                     name: String::from("this"),
@@ -901,7 +912,7 @@ mod tests {
     fn simple_input() {
         let tokens = vec![
             Token {
-                tp: TokenType::Number(1.0),
+                tp: TokenType::Number,
                 lexeme: "1".to_string(),
                 line: 1,
             },
@@ -911,7 +922,7 @@ mod tests {
                 line: 1,
             },
             Token {
-                tp: TokenType::Number(2.0),
+                tp: TokenType::Number,
                 lexeme: "2".to_string(),
                 line: 1,
             },
